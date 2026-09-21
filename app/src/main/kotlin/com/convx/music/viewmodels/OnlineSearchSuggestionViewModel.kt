@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -26,9 +26,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,6 +49,18 @@ constructor(
     init {
         viewModelScope.launch {
             query
+                // Debounce here, at the ViewModel layer, so the operator chain
+                // correctly feeds into flatMapLatest below. The 300 ms window
+                // collapses rapid keystrokes into a single emission before any
+                // network or DB work starts.
+                .debounce { q -> if (q.isEmpty()) 0L else 300L }
+                // Skip re-executing the pipeline when the settled value hasn't
+                // actually changed (e.g. cursor moved but text is identical).
+                .distinctUntilChanged()
+                // flatMapLatest cancels the previous coroutine whenever a new
+                // query comes in. Combined with debounce this guarantees that
+                // a slow in-flight request (e.g. 2 s network) is abandoned the
+                // moment the user types again — results never arrive out of order.
                 .flatMapLatest { query ->
                     if (query.isEmpty()) {
                         database.searchHistory().map { history ->
@@ -56,7 +71,7 @@ constructor(
                     } else {
                         val parsedUrl = YouTubeUrlParser.parse(query)
                         val parsedItem = if (parsedUrl != null) fetchParsedUrlItem(parsedUrl) else null
-                        
+
                         val result = if (parsedUrl != null) null else YouTube.searchSuggestions(query).getOrNull()
                         val hideExplicit = context.dataStore.get(HideExplicitKey, false)
                         val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false) || context.dataStore.get(DataSaverEnabledKey, false)
@@ -68,19 +83,19 @@ constructor(
                                 SearchSuggestionViewState(
                                     history = history,
                                     suggestions =
-                                    result
-                                        ?.queries
-                                        ?.filter { suggestionQuery ->
-                                            history.none { it.query == suggestionQuery }
-                                        }.orEmpty(),
+                                        result
+                                            ?.queries
+                                            ?.filter { suggestionQuery ->
+                                                history.none { it.query == suggestionQuery }
+                                            }.orEmpty(),
                                     items = listOfNotNull(parsedItem) +
-                                    result
-                                        ?.recommendedItems
-                                        ?.distinctBy { it.id }
-                                        ?.filter { it.id != parsedItem?.id }
-                                        ?.filterExplicit(hideExplicit)
-                                        ?.filterVideoSongs(hideVideoSongs)
-                                        .orEmpty(),
+                                        result
+                                            ?.recommendedItems
+                                            ?.distinctBy { it.id }
+                                            ?.filter { it.id != parsedItem?.id }
+                                            ?.filterExplicit(hideExplicit)
+                                            ?.filterVideoSongs(hideVideoSongs)
+                                            .orEmpty(),
                                     isFromLink = parsedUrl != null
                                 )
                             }
@@ -92,7 +107,7 @@ constructor(
     }
 
     private suspend fun fetchParsedUrlItem(parsedUrl: YouTubeUrlParser.ParsedUrl): YTItem? {
-        println("[LINK_PARSE_DEBUG] Fetching metadata for: $parsedUrl")
+        Timber.d("Fetching metadata for parsed URL: $parsedUrl")
         return try {
             val item = when (parsedUrl) {
                 is YouTubeUrlParser.ParsedUrl.Video -> {
@@ -103,11 +118,10 @@ constructor(
                     YouTube.artist(parsedUrl.id).getOrNull()?.artist
                 }
             }
-            println("[LINK_PARSE_DEBUG] Fetch successful: ${item?.id} (${item?.javaClass?.simpleName})")
+            Timber.d("Fetch successful: ${item?.id} (${item?.javaClass?.simpleName})")
             item
         } catch (e: Exception) {
-            println("[LINK_PARSE_DEBUG] Fetch failed: ${e.message}")
-            e.printStackTrace()
+            Timber.w(e, "Failed to fetch metadata for parsed URL")
             null
         }
     }
