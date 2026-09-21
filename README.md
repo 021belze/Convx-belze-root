@@ -72,7 +72,7 @@
 
 | File | Keterangan |
 |---|---|
-| `app-universal-foss-debug.apk` | Untuk semua perangkat (arm64, arm, x86_64) — **disarankan** |
+| `convx.apk` | Android, APK |
 
 ---
 
