@@ -156,7 +156,10 @@ import com.convx.music.constants.TranslateLanguageKey
 import com.convx.music.constants.TranslateModeKey
 import com.convx.music.constants.DeeplFormalityKey
 import com.convx.music.constants.PlayerBackgroundStyleKey
+import com.convx.music.db.entities.LyricsEntity
 import com.convx.music.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
+import com.convx.music.di.LyricsHelperEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import com.convx.music.lyrics.LyricsEntry
 import com.convx.music.lyrics.LyricsUtils.findCurrentLineIndex
 import com.convx.music.lyrics.LyricsUtils.isBelarusian
@@ -446,6 +449,30 @@ fun Lyrics(
         onDispose {
             LyricsTranslationHelper.setCompositionActive(false)
             LyricsTranslationHelper.cancelTranslation()
+        }
+    }
+
+    // Active fetch trigger: if lyricsEntity is null, fetch immediately in background
+    LaunchedEffect(mediaMetadata?.id, lyricsEntity, showLyrics) {
+        val meta = mediaMetadata
+        if (showLyrics && meta != null && lyricsEntity == null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val entryPoint = EntryPointAccessors.fromApplication(
+                        context.applicationContext,
+                        LyricsHelperEntryPoint::class.java
+                    )
+                    val lyricsHelper = entryPoint.lyricsHelper()
+                    val fetched = lyricsHelper.getLyrics(meta)
+                    if (fetched.lyrics != LYRICS_NOT_FOUND) {
+                        database.query {
+                            upsert(LyricsEntity(meta.id, fetched.lyrics, fetched.provider))
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Handled/ignored
+                }
+            }
         }
     }
     

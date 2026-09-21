@@ -51,7 +51,7 @@ constructor(
 
         // Migration path: place the old preferred provider first in the default order
         val preferredEnum = preferences[PreferredLyricsProviderKey]
-            .toEnum(PreferredLyricsProvider.YOULYPLUS)
+            .toEnum(PreferredLyricsProvider.LRCLIB)
         val preferredName = LyricsProviderRegistry.getProviderNameForEnum(preferredEnum)
         val defaultOrder = LyricsProviderRegistry.getDefaultProviderOrder()
         val migratedOrder = listOf(preferredName) + defaultOrder.filter { it != preferredName }
@@ -97,8 +97,8 @@ constructor(
                 for (provider in providers) {
                     if (!provider.isEnabled(context)) continue
                     try {
-                        // Per-provider timeout: max 2.5s per provider so slow/dead servers don't freeze the waterfall
-                        val result = withTimeoutOrNull(2500L) {
+                        // Per-provider timeout: max 1.8s per provider so slow/dead servers don't freeze the waterfall
+                        val result = withTimeoutOrNull(1800L) {
                             provider.getLyrics(
                                 mediaMetadata.id,
                                 mediaMetadata.title,

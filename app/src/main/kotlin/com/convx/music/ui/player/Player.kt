@@ -3432,8 +3432,7 @@ fun InlineLyricsView(
 
     LaunchedEffect(mediaMetadata?.id, currentLyrics) {
         if (mediaMetadata != null && currentLyrics == null) {
-            delay(500)
-            coroutineScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 try {
                     val entryPoint = EntryPointAccessors.fromApplication(
                         context.applicationContext,

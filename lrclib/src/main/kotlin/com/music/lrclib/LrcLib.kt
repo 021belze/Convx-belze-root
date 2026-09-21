@@ -6,10 +6,13 @@ import com.music.lrclib.models.bestMatchingForRelaxed
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -19,6 +22,11 @@ import kotlin.math.abs
 object LrcLib {
     private val client by lazy {
         HttpClient(CIO) {
+            install(HttpTimeout) {
+                connectTimeoutMillis = 2_000
+                requestTimeoutMillis = 5_000
+            }
+
             install(ContentNegotiation) {
                 json(
                     Json {
@@ -30,9 +38,10 @@ object LrcLib {
 
             defaultRequest {
                 url("https://lrclib.net")
+                header("User-Agent", "Convx/1.5.2 (https://github.com/021belze/Convx-belze-root)")
             }
 
-            expectSuccess = true
+            expectSuccess = false
         }
     }
 
@@ -72,18 +81,42 @@ object LrcLib {
         return cleaned.trim()
     }
 
+    private suspend fun queryExactLyrics(
+        trackName: String,
+        artistName: String,
+        duration: Int,
+        albumName: String? = null,
+    ): Track? = runCatching {
+        val response = client.get("/api/get") {
+            parameter("track_name", trackName)
+            parameter("artist_name", artistName)
+            if (duration > 0) parameter("duration", duration)
+            if (!albumName.isNullOrBlank()) parameter("album_name", albumName)
+        }
+        if (response.status == HttpStatusCode.OK) {
+            response.body<Track>()
+        } else {
+            null
+        }
+    }.getOrNull()
+
     private suspend fun queryLyricsWithParams(
         trackName: String? = null,
         artistName: String? = null,
         albumName: String? = null,
         query: String? = null,
     ): List<Track> = runCatching {
-        client.get("/api/search") {
+        val response = client.get("/api/search") {
             if (query != null) parameter("q", query)
             if (trackName != null) parameter("track_name", trackName)
             if (artistName != null) parameter("artist_name", artistName)
             if (albumName != null) parameter("album_name", albumName)
-        }.body<List<Track>>()
+        }
+        if (response.status == HttpStatusCode.OK) {
+            response.body<List<Track>>()
+        } else {
+            emptyList()
+        }
     }.getOrDefault(emptyList())
 
     private suspend fun queryLyrics(
@@ -141,9 +174,26 @@ object LrcLib {
         duration: Int,
         album: String? = null,
     ) = runCatching {
-        val tracks = queryLyrics(artist, title, album)
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
+
+        // Fast path: Try exact match first via /api/get (< 300ms, direct database hit)
+        val exactTrack = queryExactLyrics(cleanedTitle, cleanedArtist, duration, album)
+            ?: (if (!album.isNullOrBlank()) queryExactLyrics(cleanedTitle, cleanedArtist, duration, null) else null)
+            ?: (if (cleanedTitle != title.trim() || cleanedArtist != artist.trim()) {
+                queryExactLyrics(title.trim(), artist.trim(), duration, null)
+            } else null)
+
+        val exactLyrics = exactTrack?.let { track ->
+            track.syncedLyrics ?: track.plainLyrics
+        }
+
+        if (!exactLyrics.isNullOrBlank()) {
+            return@runCatching exactLyrics
+        }
+
+        // Fallback path: Search endpoint
+        val tracks = queryLyrics(artist, title, album)
 
         val res = when {
             duration == -1 -> {
