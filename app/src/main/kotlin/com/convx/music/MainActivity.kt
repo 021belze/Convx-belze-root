@@ -1068,12 +1068,13 @@ class MainActivity : ComponentActivity() {
                 // actual navigation call lands (see enterSearch/exitSearch below).
                 var searchVisualOverride by remember { mutableStateOf<Boolean?>(null) }
 
-                val onSearch: (String) -> Unit = remember(localOnlyMode, playerConnection, focusManager, keyboardController) {
+                val onSearch: (String) -> Unit = remember(localOnlyMode, playerConnection, focusManager, keyboardController, onQueryChange) {
                     { searchQuery ->
                         if (searchQuery.isNotEmpty()) {
+                            onQueryChange(TextFieldValue(searchQuery, TextRange(searchQuery.length)))
                             searchKeyboardActive = false
                             searchOverlayOpen = false
-                            focusManager.clearFocus()
+                            focusManager.clearFocus(force = true)
                             keyboardController?.hide()
 
                             when (val parsedUrl = YouTubeUrlParser.parse(searchQuery)) {
@@ -1488,14 +1489,13 @@ class MainActivity : ComponentActivity() {
                         searchVisualOverride = false
                         coroutineScope.launch {
                             delay(SearchNavTransitionDelayMs)
-                            // search/{query} (the results screen) is still a real pushed
-                            // NavHost destination -- leave it the normal way. The input
-                            // overlay itself just closes, and whatever tab was underneath
-                            // is still exactly where it was: no page to scroll back to.
-                            if (navController.currentDestination?.route?.startsWith("search/") == true) {
+                            val wasInSearchResult = navController.currentDestination?.route?.startsWith("search/") == true
+                            if (wasInSearchResult) {
                                 navController.navigateUp()
+                                searchOverlayOpen = true
+                            } else {
+                                searchOverlayOpen = false
                             }
-                            searchOverlayOpen = false
                             searchVisualOverride = null
                         }
                     }
@@ -1505,7 +1505,7 @@ class MainActivity : ComponentActivity() {
                     {
                         searchKeyboardActive = false
                         searchOverlayOpen = false
-                        focusManager.clearFocus()
+                        focusManager.clearFocus(force = true)
                         keyboardController?.hide()
                     }
                 }
@@ -2134,7 +2134,6 @@ class MainActivity : ComponentActivity() {
                                         snackbarHostState = snackbarHostState,
                                     )
                                 }
-                                }
 
                                 // Search, over the tabs rather than beside them. This box
                                 // (not NavHost's own modifier) is what carries layerBackdrop
@@ -2162,6 +2161,7 @@ class MainActivity : ComponentActivity() {
                                         pureBlack = pureBlack,
                                     )
                                 }
+                                } // Box(layerBackdrop)
                                 } // CompositionLocalProvider(LocalSharedTransitionScope)
                                 } // SharedTransitionLayout
                             }

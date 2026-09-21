@@ -589,6 +589,7 @@ fun NavBarSearchInputBar(
                         config = glassConfig.copy(surfaceOpacity = 0.12f),
                         shape = pillShape,
                         highlightAlpha = 0.3f,
+                        frozen = { state.query.text.isNotEmpty() },
                     )
                 } else {
                     Modifier.background(onTint.copy(alpha = 0.15f))

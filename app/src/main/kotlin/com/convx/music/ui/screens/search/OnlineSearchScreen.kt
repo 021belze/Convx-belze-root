@@ -154,6 +154,7 @@ fun OnlineSearchScreen(
                 online = false,
                 contentColor = contentColor,
                 onClick = {
+                    onQueryChange(TextFieldValue(history.query, TextRange(history.query.length)))
                     onSearch(history.query)
                     onDismiss()
                 },
@@ -193,6 +194,7 @@ fun OnlineSearchScreen(
                 online = true,
                 contentColor = contentColor,
                 onClick = {
+                    onQueryChange(TextFieldValue(query, TextRange(query.length)))
                     onSearch(query)
                     onDismiss()
                 },
