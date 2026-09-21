@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -167,6 +167,9 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.music.innertube.YouTube
 import com.music.innertube.models.SongItem
 import com.music.innertube.models.WatchEndpoint
+import com.music.innertube.utils.YouTubeUrlParser
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.convx.music.constants.AppBarHeight
 import com.convx.music.constants.AppLanguageKey
 import com.convx.music.constants.DarkModeKey
@@ -1041,29 +1044,52 @@ class MainActivity : ComponentActivity() {
                 // change across the first-tap/second-tap boundary). Reset below whenever
                 // navigation leaves both search routes.
                 var searchKeyboardActive by rememberSaveable { mutableStateOf(false) }
+                /**
+                 * Search is an overlay drawn above the pager, not one of its pages.
+                 *
+                 * It was a page, at index 1 -- between Home and Library -- while the bar
+                 * has always drawn it as the standalone circle on the far right. Opening
+                 * search therefore slid the pager sideways past a tab, and every real tab
+                 * switch slid past search. Neither matched what the bar showed. Making it
+                 * a page at the END instead would have cost two intervening pages'
+                 * composition on the way there, so it is not a page at all: the pager is
+                 * exactly the three tabs the bar draws, and search opens in place over
+                 * them for zero page travel.
+                 */
+                var searchOverlayOpen by rememberSaveable { mutableStateOf(openSearchOnLaunch) }
                 var storedSearchSource by rememberEnumPreference(SearchSourceKey, SearchSource.ONLINE)
                 // Local-only mode pins search to the on-device library; the stored
                 // preference is left alone so it returns when the mode is turned off.
                 val searchSource = if (localOnlyMode) SearchSource.LOCAL else storedSearchSource
                 val searchFocusRequester = remember { FocusRequester() }
+                val keyboardController = LocalSoftwareKeyboardController.current
                 // Non-null while entering/exiting search overrides the route-derived
                 // visual state, so the shrink/expand animation plays out before the
                 // actual navigation call lands (see enterSearch/exitSearch below).
                 var searchVisualOverride by remember { mutableStateOf<Boolean?>(null) }
 
-                val onSearch: (String) -> Unit = remember(localOnlyMode) {
+                val onSearch: (String) -> Unit = remember(localOnlyMode, playerConnection, focusManager, keyboardController) {
                     { searchQuery ->
                         if (searchQuery.isNotEmpty()) {
-                            // search/{query} is the YouTube results screen. In local-only
-                            // mode the results are already on screen (search_input renders
-                            // LocalSearchScreen live), so submitting just records history.
-                            if (!localOnlyMode) navController.navigate("search/${URLEncoder.encode(searchQuery, "UTF-8")}") {
-                                // No launchSingleTop: it compares destination id, not
-                                // resolved args, so re-submitting a new query while
-                                // already on search/{oldQuery} could get silently
-                                // treated as "already there" and dropped. popUpTo
-                                // below still prevents stacking a new entry per edit.
-                                popUpTo("search/{query}") { inclusive = true }
+                            searchKeyboardActive = false
+                            searchOverlayOpen = false
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+
+                            when (val parsedUrl = YouTubeUrlParser.parse(searchQuery)) {
+                                is YouTubeUrlParser.ParsedUrl.Video -> {
+                                    playerConnection?.playQueue(
+                                        YouTubeQueue(WatchEndpoint(videoId = parsedUrl.id)),
+                                    )
+                                }
+                                is YouTubeUrlParser.ParsedUrl.Artist -> {
+                                    navController.navigate("artist/${parsedUrl.id}")
+                                }
+                                null -> {
+                                    if (!localOnlyMode) navController.navigate("search/${URLEncoder.encode(searchQuery, "UTF-8")}") {
+                                        popUpTo("search/{query}") { inclusive = true }
+                                    }
+                                }
                             }
 
                             if (dataStore[PauseSearchHistoryKey] != true) {
@@ -1084,20 +1110,6 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(currentRoute) {
                     Timber.tag("Navigation").d("route -> $currentRoute")
                 }
-
-                /**
-                 * Search is an overlay drawn above the pager, not one of its pages.
-                 *
-                 * It was a page, at index 1 -- between Home and Library -- while the bar
-                 * has always drawn it as the standalone circle on the far right. Opening
-                 * search therefore slid the pager sideways past a tab, and every real tab
-                 * switch slid past search. Neither matched what the bar showed. Making it
-                 * a page at the END instead would have cost two intervening pages'
-                 * composition on the way there, so it is not a page at all: the pager is
-                 * exactly the three tabs the bar draws, and search opens in place over
-                 * them for zero page travel.
-                 */
-                var searchOverlayOpen by rememberSaveable { mutableStateOf(openSearchOnLaunch) }
 
                 // Home/Library/Settings are real NavHost destinations again, so
                 // currentRoute already IS the tab route -- no pager-page lookup needed.
@@ -1434,7 +1446,7 @@ class MainActivity : ComponentActivity() {
                 // transition, at the same per-frame cost already measured and fixed for
                 // scroll. OR'd in here rather than folded into BackdropFreeze itself,
                 // which many other screens also use for their own local backdrops.
-                val navTransitionFreeze = rememberNavTransitionFreeze(currentRoute)
+                val navTransitionFreeze = rememberNavTransitionFreeze(effectiveRoute)
                 // Home/Library/Settings are real NavHost destinations again, so a tab
                 // switch IS a route change and navTransitionFreeze above already covers
                 // it -- the separate pager-motion freeze this used to need doesn't
@@ -1489,8 +1501,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val dismissSearchOverlay: () -> Unit = remember(focusManager, keyboardController) {
+                    {
+                        searchKeyboardActive = false
+                        searchOverlayOpen = false
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                }
+
                 // The nav bar (rendered outside/above search_input and search/{query} in
-                // the tree below) owns the actual search text field now â€” both screens
+                // the tree below) owns the actual search text field now — both screens
                 // just read this to filter/display results.
                 val navSearchState = NavSearchState(
                     visualActive = searchVisualOverride ?: inSearchScreen,
@@ -1506,18 +1527,11 @@ class MainActivity : ComponentActivity() {
                     canToggleSource = !localOnlyMode,
                     onTapSearchIcon = enterSearch,
                     onTapBar = {
-                        if (inSearchScreen && !inSearchInputScreen) {
-                            // Tapping the bar again from a results screen (search/{query})
-                            // pops that screen and reopens the search overlay's keyboard
-                            // instead of trying to resubmit in place.
-                            if (navController.currentDestination?.route !in TabRootRoutes) {
-                                navController.popBackStack(navController.graph.startDestinationId, inclusive = false)
-                            }
-                        }
                         searchKeyboardActive = true
                     },
                     onExit = exitSearch,
                     onCloseKeyboard = { searchKeyboardActive = false },
+                    onDismissOverlay = dismissSearchOverlay,
                     focusRequester = searchFocusRequester,
                 )
 

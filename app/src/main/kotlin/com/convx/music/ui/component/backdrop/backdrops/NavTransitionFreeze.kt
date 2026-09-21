@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.collectLatest
 // must not be padded past that need: this window is how long the glass backdrop
 // behind chrome visibly shows stale content during a full-screen push (see
 // Motion.PushMillis) -- it was 450ms and that staleness was clearly visible.
-private const val NavTransitionFreezeWindowNs = 330_000_000L
+internal const val NavTransitionFreezeWindowNs = 330_000_000L
 
 /**
  * Time-boxed freeze for the app-level [layerBackdrop] across a screen-to-screen

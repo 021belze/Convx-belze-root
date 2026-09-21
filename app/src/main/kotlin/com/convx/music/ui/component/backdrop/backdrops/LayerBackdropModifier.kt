@@ -154,6 +154,7 @@ private class LayerBackdropNode(
         // bump is what keeps the glass surfaces on their existing captures.
         if (frozen() && backdrop.hasRecording) {
             backdrop.onDraw(this@draw)
+            queueTrailingRecord(NavTransitionFreezeWindowNs)
             return
         }
 

@@ -137,52 +137,20 @@ fun SearchScreen(
     navController: NavController,
     pureBlack: Boolean
 ) {
-    val database = LocalDatabase.current
-    val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val isPlayerExpanded = LocalIsPlayerExpanded.current
-    val playerConnection = LocalPlayerConnection.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     // The nav bar owns the actual search text field now (see NavBarSearchInputBar
     // in FloatingNavBar.kt) — this screen just reads the live query to filter results.
     val navSearch = LocalNavSearchState.current
-    val pauseSearchHistory by rememberPreference(PauseSearchHistoryKey, defaultValue = false)
 
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // The Explore/Suggestions/Albums tabs are all YouTube browse pages.
     val (localOnly) = rememberPreference(LocalOnlyModeKey, false)
     var searchActive by rememberSaveable { mutableStateOf(false) }
     var showSearchContent by remember { mutableStateOf(false) }
-
-    val onSearchFromSuggestion: (String) -> Unit = remember {
-        { searchQuery ->
-            if (searchQuery.isNotEmpty()) {
-                focusManager.clearFocus()
-                when (val parsedUrl = YouTubeUrlParser.parse(searchQuery)) {
-                    is YouTubeUrlParser.ParsedUrl.Video -> {
-                        playerConnection?.playQueue(
-                            YouTubeQueue(WatchEndpoint(videoId = parsedUrl.id)),
-                        )
-                    }
-                    is YouTubeUrlParser.ParsedUrl.Artist -> {
-                        navController.navigate("artist/${parsedUrl.id}")
-                    }
-                    null -> {
-                        navController.navigate("search/${URLEncoder.encode(searchQuery, "UTF-8")}")
-                    }
-                }
-                if (!pauseSearchHistory) {
-                    coroutineScope.launch(Dispatchers.IO) {
-                        database.query {
-                            insert(SearchHistory(query = searchQuery))
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     // Fixed elevated token, not derived from any specific result's thumbnail —
     // safe to override with the user's own picked theme color.
@@ -226,7 +194,7 @@ fun SearchScreen(
                     )
 
                     AnimatedVisibility(
-                        visible = navSearch.query.text.isEmpty() && !localOnly,
+                        visible = navSearch.query.text.isEmpty() && !navSearch.keyboardActive && !localOnly,
                         enter = expandVertically(animationSpec = tween(durationMillis = 245, easing = FastOutSlowInEasing)) + fadeIn(),
                         exit = shrinkVertically(animationSpec = tween(durationMillis = 245, easing = FastOutSlowInEasing)) + fadeOut()
                     ) {
@@ -300,7 +268,7 @@ fun SearchScreen(
                     )
                     .fillMaxSize()
             ) {
-                if (navSearch.query.text.isEmpty() && !localOnly) {
+                if (navSearch.query.text.isEmpty() && !navSearch.keyboardActive && !localOnly) {
                     val tabPadding = PaddingValues(bottom = bottomPadding + 50.dp)
                     when (selectedTabIndex) {
                         0 -> ExploreTabContent(navController = navController, contentPadding = tabPadding)
@@ -312,15 +280,15 @@ fun SearchScreen(
                         SearchSource.LOCAL -> LocalSearchScreen(
                             query = navSearch.query.text,
                             navController = navController,
-                            onDismiss = { },
+                            onDismiss = navSearch.onDismissOverlay,
                             pureBlack = pureBlack
                         )
                         SearchSource.ONLINE -> OnlineSearchScreen(
                             query = navSearch.query.text,
                             onQueryChange = navSearch.onQueryChange,
                             navController = navController,
-                            onSearch = { onSearchFromSuggestion(it) },
-                            onDismiss = { },
+                            onSearch = navSearch.onSubmit,
+                            onDismiss = navSearch.onDismissOverlay,
                             pureBlack = pureBlack,
                             contentColor = onTint,
                         )

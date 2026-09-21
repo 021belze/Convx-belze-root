@@ -47,6 +47,8 @@ data class NavSearchState(
     // System back gesture while the keyboard is open -> just close the keyboard,
     // drop back to search-expanded, without navigating away.
     val onCloseKeyboard: () -> Unit = {},
+    // Dismiss the search overlay without popping destination
+    val onDismissOverlay: () -> Unit = {},
     val focusRequester: FocusRequester = FocusRequester(),
 )
 
