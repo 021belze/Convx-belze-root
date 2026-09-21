@@ -45,6 +45,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.LocalIndication
@@ -214,6 +215,7 @@ fun FloatingTabBar(
     // to filling available space (e.g. first-ever composition in search mode).
     expandedContentWidthPx: Int? = null,
     onExpandedWidthChanged: ((Int) -> Unit)? = null,
+    onTransitionActiveChanged: ((Boolean) -> Unit)? = null,
     content: FloatingTabBarScope.() -> Unit
 ) {
     // Rebuilt every composition, deliberately not remembered. The tabs hold
@@ -237,6 +239,10 @@ fun FloatingTabBar(
     // the transition object is available here to drive the gooey blur pulse,
     // not just inside the content lambda.
     val transition = updateTransition(targetState = visual, label = "floatingTabBarVisual")
+    val isTransitioning = transition.currentState != transition.targetState
+    LaunchedEffect(isTransitioning) {
+        onTransitionActiveChanged?.invoke(isTransitioning)
+    }
     val gooeyBlurPx = with(LocalDensity.current) { GooeyPeakBlur.toPx() }
     // Liquid "gooey" merge/split (see GooeyTransition.kt): peaks mid-crossfade
     // and returns to 0 at rest, on every transition regardless of direction —
@@ -272,8 +278,12 @@ fun FloatingTabBar(
             Box {
                 transition.AnimatedContent(
                     transitionSpec = {
-                        fadeIn(tween(220, easing = FastOutSlowInEasing)) togetherWith
-                            fadeOut(tween(180, easing = FastOutSlowInEasing))
+                        (fadeIn(tween(220, easing = FastOutSlowInEasing)) togetherWith
+                            fadeOut(tween(180, easing = FastOutSlowInEasing))).using(
+                            SizeTransform(clip = false) { _, _ ->
+                                spring(dampingRatio = 0.85f, stiffness = 380f)
+                            }
+                        )
                     },
                     contentAlignment = Alignment.BottomCenter
                 ) { targetVisual ->

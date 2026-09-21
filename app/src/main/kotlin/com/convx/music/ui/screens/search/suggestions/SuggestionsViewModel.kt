@@ -23,6 +23,7 @@ import com.music.innertube.models.ArtistItem
 import com.music.innertube.models.WatchEndpoint
 import com.convx.music.playback.PlayerConnection
 import com.convx.music.playback.queues.YouTubeQueue
+import com.convx.music.models.toMediaMetadata
 import androidx.navigation.NavController
 
 @HiltViewModel
@@ -142,7 +143,7 @@ class SuggestionsViewModel @Inject constructor() : ViewModel() {
 
                 if (bestMatch != null) {
                     withContext(Dispatchers.Main) {
-                        playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = bestMatch.id)))
+                        playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = bestMatch.id), bestMatch.toMediaMetadata()))
                     }
                 }
             }
@@ -202,7 +203,7 @@ class SuggestionsViewModel @Inject constructor() : ViewModel() {
 
                     if (bestMatch != null) {
                         withContext(Dispatchers.Main) {
-                            playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = bestMatch.id)))
+                            playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = bestMatch.id), bestMatch.toMediaMetadata()))
                         }
                     }
                 }

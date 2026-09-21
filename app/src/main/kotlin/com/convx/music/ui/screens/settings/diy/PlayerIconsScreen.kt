@@ -88,7 +88,7 @@ fun PlayerIconsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val (useAppleMusicPlayer, _) = rememberPreference(UseAppleMusicPlayerKey, defaultValue = false)
+    val (useAppleMusicPlayer, _) = rememberPreference(UseAppleMusicPlayerKey, defaultValue = true)
     val (json) = rememberPreference(PlayerIconsKey, defaultValue = "{}")
     val v1Set = remember(json) { PlayerIconSet.fromJson(json) }
     val (v2Json) = rememberPreference(V2PlayerIconsKey, defaultValue = "{}")

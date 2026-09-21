@@ -107,6 +107,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -1171,7 +1172,9 @@ class MainActivity : ComponentActivity() {
                 val (forceTabletLayout) = rememberPreference(ForceTabletLayoutKey, defaultValue = false)
                 // A real tablet gets the side bar on its own; the toggle only exists
                 // to force it onto a device that wouldn't otherwise qualify.
-                val isWideScreen = configuration.containerDpSize.width >= TabletWidthThreshold
+                val androidConfiguration = LocalConfiguration.current
+                val isTablet = androidConfiguration.smallestScreenWidthDp >= 600
+                val isWideScreen = isTablet && configuration.containerDpSize.width >= TabletWidthThreshold
                 val showRail = forceTabletLayout || isWideScreen
                 val (sideBarCollapsed, onSideBarCollapsedChange) = rememberPreference(SideBarCollapsedKey, defaultValue = false)
                 val sideBarContentInset by animateDpAsState(

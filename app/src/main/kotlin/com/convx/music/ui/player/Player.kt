@@ -344,7 +344,7 @@ fun BottomSheetPlayer(
     // through the sheet's real drag/expand/collapse mechanics -- an early return
     // here used to skip that machinery entirely, which is why V17 used to render
     // as an always-on-top full-bleed box instead of a proper mini/expanded player.
-    val (useAppleMusicPlayer) = rememberPreference(UseAppleMusicPlayerKey, defaultValue = false)
+    val (useAppleMusicPlayer) = rememberPreference(UseAppleMusicPlayerKey, defaultValue = true)
 
     // Shared between the background slot (BackgroundVideoView polls into it)
     // and the control pills below (read it via LocalBackdropLoopBucket) — see
@@ -3441,8 +3441,10 @@ fun InlineLyricsView(
                     )
                     val lyricsHelper = entryPoint.lyricsHelper()
                     val fetchedLyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
-                    database.query {
-                        upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
+                    if (fetchedLyricsWithProvider.lyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+                        database.query {
+                            upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
+                        }
                     }
                 } catch (e: Exception) {
                     // Handle error

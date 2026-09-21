@@ -145,7 +145,7 @@ fun PlayerThemeScreen(
         PlayerGradientAngleKey, defaultValue = 90f
     )
     val (useAppleMusicPlayer, onUseAppleMusicPlayerChange) = rememberPreference(
-        UseAppleMusicPlayerKey, defaultValue = false
+        UseAppleMusicPlayerKey, defaultValue = true
     )
     val (showPlayerThumbnailShadow, onShowPlayerThumbnailShadowChange) = rememberPreference(
         ShowPlayerThumbnailShadowKey, defaultValue = false

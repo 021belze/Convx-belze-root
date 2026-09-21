@@ -18,12 +18,16 @@ import com.convx.music.utils.dataStore
 import com.convx.music.utils.reportException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 class LyricsHelper
@@ -57,14 +61,19 @@ constructor(
 
 
     private val cache = LruCache<String, List<LyricsResult>>(MAX_CACHE_SIZE)
+    private val inFlightRequests = ConcurrentHashMap<String, Deferred<LyricsWithProvider>>()
     private var currentLyricsJob: Job? = null
 
     suspend fun getLyrics(mediaMetadata: MediaMetadata): LyricsWithProvider {
-        currentLyricsJob?.cancel()
-
         val cached = cache.get(mediaMetadata.id)?.firstOrNull()
         if (cached != null) {
             return LyricsWithProvider(cached.lyrics, cached.providerName)
+        }
+
+        // Single-flight deduplication: if this song is already being fetched, await the existing request
+        val existingDeferred = inFlightRequests[mediaMetadata.id]
+        if (existingDeferred != null && existingDeferred.isActive) {
+            return existingDeferred.await()
         }
 
         // Check network connectivity before making network requests
@@ -82,20 +91,29 @@ constructor(
         }
 
         val providers = resolveLyricsProviders()
-        val scope = CoroutineScope(SupervisorJob())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val deferred = scope.async {
-            for (provider in providers) {
-                if (provider.isEnabled(context)) {
+            try {
+                for (provider in providers) {
+                    if (!provider.isEnabled(context)) continue
                     try {
-                        val result = provider.getLyrics(
-                            mediaMetadata.id,
-                            mediaMetadata.title,
-                            mediaMetadata.artists.joinToString { it.name },
-                            mediaMetadata.duration,
-                            mediaMetadata.album?.title,
-                        )
+                        // Per-provider timeout: max 2.5s per provider so slow/dead servers don't freeze the waterfall
+                        val result = withTimeoutOrNull(2500L) {
+                            provider.getLyrics(
+                                mediaMetadata.id,
+                                mediaMetadata.title,
+                                mediaMetadata.artists.joinToString { it.name },
+                                mediaMetadata.duration,
+                                mediaMetadata.album?.title,
+                            )
+                        } ?: continue
+
                         result.onSuccess { lyrics ->
-                            return@async LyricsWithProvider(lyrics, provider.name)
+                            if (lyrics.isNotBlank() && lyrics != LYRICS_NOT_FOUND) {
+                                val found = LyricsWithProvider(lyrics, provider.name)
+                                cache.put(mediaMetadata.id, listOf(LyricsResult(provider.name, lyrics)))
+                                return@async found
+                            }
                         }.onFailure {
                             reportException(it)
                         }
@@ -104,12 +122,18 @@ constructor(
                         reportException(e)
                     }
                 }
+                LyricsWithProvider(LYRICS_NOT_FOUND, "Unknown")
+            } finally {
+                inFlightRequests.remove(mediaMetadata.id)
             }
-            return@async LyricsWithProvider(LYRICS_NOT_FOUND, "Unknown")
         }
 
-        val result = deferred.await()
-        scope.cancel()
+        inFlightRequests[mediaMetadata.id] = deferred
+        val result = try {
+            deferred.await()
+        } finally {
+            scope.cancel()
+        }
         return result
     }
 

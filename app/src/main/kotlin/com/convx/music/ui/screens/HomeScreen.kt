@@ -1658,7 +1658,6 @@ private fun LazyListScope.localHomeContent(
         item(key = "local_albums_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.albums),
-                modifier = Modifier.animateItem(),
             )
         }
         localItemRows(deps, "local_album", albums.take(LocalShelfRows * columns), columns)
@@ -1668,7 +1667,6 @@ private fun LazyListScope.localHomeContent(
         item(key = "local_artists_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.artists),
-                modifier = Modifier.animateItem(),
             )
         }
         localItemRows(deps, "local_artist", artists.take(LocalShelfRows * columns), columns)
@@ -1678,7 +1676,6 @@ private fun LazyListScope.localHomeContent(
         item(key = "local_playlists_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.playlists),
-                modifier = Modifier.animateItem(),
             )
         }
         val shownPlaylists = playlists.take(LocalListPreview)
@@ -1701,7 +1698,6 @@ private fun LazyListScope.localHomeContent(
         item(key = "local_folders_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.folders),
-                modifier = Modifier.animateItem(),
             )
         }
         // Built once for the whole section, not per row -- a per-row scan over every
@@ -1771,7 +1767,6 @@ private fun LazyListScope.localSongShelf(
     item(key = key + "_title", contentType = "section_title") {
         NavigationTitle(
             title = stringResource(titleRes),
-            modifier = Modifier.animateItem(),
             onPlayAllClick = {
                 deps.playerConnection.playQueue(
                     ListQueue(items = songs.map { it.toMediaItem() }, startIndex = 0),
@@ -1891,7 +1886,6 @@ private fun LazyListScope.speedDialSection(
         item(key = "speed_dial_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.speed_dial),
-                modifier = Modifier.animateItem(),
             )
         }
 
@@ -2128,7 +2122,6 @@ private fun LazyListScope.quickPicksSection(
             val quickPicksTitle = stringResource(R.string.quick_picks)
             NavigationTitle(
                 title = quickPicksTitle,
-                modifier = Modifier.animateItem(),
                 onPlayAllClick = {
                     deps.playerConnection.playQueue(
                         ListQueue(
@@ -2230,7 +2223,6 @@ private fun LazyListScope.communityPlaylistsSection(
         item(key = "community_playlists_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.from_the_community),
-                modifier = Modifier.animateItem(),
             )
         }
 
@@ -2342,7 +2334,6 @@ private fun LazyListScope.keepListeningSection(
         item(key = "keep_listening_title", contentType = "section_title") {
             NavigationTitle(
                 title = stringResource(R.string.recently_played),
-                modifier = Modifier.animateItem(),
             )
         }
 
@@ -2473,7 +2464,6 @@ private fun LazyListScope.accountPlaylistsSection(
                 onClick = {
                     deps.navController.navigate("account")
                 },
-                modifier = Modifier.animateItem(),
             )
         }
 
@@ -2510,7 +2500,6 @@ private fun LazyListScope.forgottenFavoritesSection(
             val forgottenFavoritesTitle = stringResource(R.string.forgotten_favorites)
             NavigationTitle(
                 title = forgottenFavoritesTitle,
-                modifier = Modifier.animateItem(),
                 onPlayAllClick = {
                     deps.playerConnection.playQueue(
                         ListQueue(
@@ -2640,7 +2629,6 @@ private fun LazyListScope.similarRecommendationsSection(
                         is Playlist -> {}
                     }
                 },
-                modifier = Modifier.animateItem(),
             )
         }
 
@@ -2716,7 +2704,6 @@ private fun LazyListScope.homePageSection(
                         )
                     }
                 } else null,
-                modifier = Modifier.animateItem(),
             )
         }
 
@@ -2826,7 +2813,6 @@ private fun LazyListScope.moodAndGenresSection(
                 onClick = {
                     deps.navController.navigate("mood_and_genres")
                 },
-                modifier = Modifier.animateItem(),
             )
         }
         item(key = "mood_and_genres_list", contentType = "grid_carousel") {

@@ -15,8 +15,16 @@ import kotlinx.coroutines.withContext
 
 class YouTubeQueue(
     private var endpoint: WatchEndpoint,
-    override val preloadItem: MediaMetadata? = null,
+    preloadItem: MediaMetadata? = null,
 ) : Queue {
+    override val preloadItem: MediaMetadata? = preloadItem ?: endpoint.videoId?.let { vId ->
+        MediaMetadata(
+            id = vId,
+            title = "",
+            artists = emptyList(),
+            duration = 0,
+        )
+    }
     private var continuation: String? = null
     private var retryCount = 0
     private val maxRetries = 3

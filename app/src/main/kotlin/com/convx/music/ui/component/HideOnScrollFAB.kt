@@ -7,6 +7,12 @@ package com.convx.music.ui.component
 
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ScrollState
@@ -34,6 +40,16 @@ import com.convx.music.R
 import com.convx.music.ui.component.backdrop.backdrops.rememberLayerBackdrop
 import com.convx.music.ui.utils.isScrollingUp
 
+private val FabEnterTransition =
+    slideInVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } +
+        fadeIn(tween(180)) +
+        scaleIn(spring(dampingRatio = 0.8f, stiffness = 380f), initialScale = 0.8f)
+
+private val FabExitTransition =
+    slideOutVertically(spring(dampingRatio = 1.0f, stiffness = 400f)) { it / 2 } +
+        fadeOut(tween(150)) +
+        scaleOut(spring(dampingRatio = 1.0f, stiffness = 400f), targetScale = 0.8f)
+
 @Composable
 fun BoxScope.HideOnScrollFAB(
     visible: Boolean = true,
@@ -44,8 +60,8 @@ fun BoxScope.HideOnScrollFAB(
 ) {
     AnimatedVisibility(
         visible = visible && lazyListState.isScrollingUp(),
-        enter = slideInVertically { it },
-        exit = slideOutVertically { it },
+        enter = FabEnterTransition,
+        exit = FabExitTransition,
         modifier =
         Modifier
             .align(Alignment.BottomEnd)
@@ -104,8 +120,8 @@ fun BoxScope.HideOnScrollFAB(
 ) {
     AnimatedVisibility(
         visible = visible && lazyListState.isScrollingUp(),
-        enter = slideInVertically { it },
-        exit = slideOutVertically { it },
+        enter = FabEnterTransition,
+        exit = FabExitTransition,
         modifier =
         Modifier
             .align(Alignment.BottomEnd)
@@ -164,8 +180,8 @@ fun BoxScope.HideOnScrollFAB(
 ) {
     AnimatedVisibility(
         visible = visible && scrollState.isScrollingUp(),
-        enter = slideInVertically { it },
-        exit = slideOutVertically { it },
+        enter = FabEnterTransition,
+        exit = FabExitTransition,
         modifier =
         Modifier
             .align(Alignment.BottomEnd)

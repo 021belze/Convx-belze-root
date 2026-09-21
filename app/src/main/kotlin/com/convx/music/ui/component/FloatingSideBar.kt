@@ -235,7 +235,6 @@ fun AppFloatingSideBar(
             .clip(panelShape)
             .then(panelSurface)
             .then(interactiveHighlight.modifier)
-            .then(interactiveHighlight.gestureModifier)
             .padding(vertical = 14.dp),
     ) {
         Row(

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -822,14 +822,16 @@ class MusicService :
                     .first() == null
             ) {
                 val lyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
-                database.query {
-                    upsert(
-                        LyricsEntity(
-                            id = mediaMetadata.id,
-                            lyrics = lyricsWithProvider.lyrics,
-                            provider = lyricsWithProvider.provider,
-                        ),
-                    )
+                if (lyricsWithProvider.lyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+                    database.query {
+                        upsert(
+                            LyricsEntity(
+                                id = mediaMetadata.id,
+                                lyrics = lyricsWithProvider.lyrics,
+                                provider = lyricsWithProvider.provider,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -1571,6 +1573,10 @@ class MusicService :
             // Track original queue size for shuffle playlist first feature
             originalQueueSize = initialStatus.items.size
             if (queue.preloadItem != null) {
+                val completeItem = initialStatus.items.getOrNull(initialStatus.mediaItemIndex)
+                if (completeItem != null && queue.preloadItem?.title.isNullOrBlank()) {
+                    player.replaceMediaItem(0, completeItem)
+                }
                 player.addMediaItems(
                     0,
                     initialStatus.items.subList(0, initialStatus.mediaItemIndex)

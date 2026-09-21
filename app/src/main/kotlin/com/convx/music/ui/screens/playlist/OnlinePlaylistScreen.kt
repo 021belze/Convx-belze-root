@@ -533,7 +533,7 @@ fun OnlinePlaylistScreen(
                                                         is AlbumItem -> navController.navigate("album/${item.browseId}")
                                                         is ArtistItem -> navController.navigate("artist/${item.id}")
                                                         is SongItem -> playerConnection.playQueue(
-                                                            YouTubeQueue(WatchEndpoint(videoId = item.id))
+                                                            YouTubeQueue(WatchEndpoint(videoId = item.id), item.toMediaMetadata())
                                                         )
                                                     }
                                                 },

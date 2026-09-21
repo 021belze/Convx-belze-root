@@ -246,7 +246,7 @@ fun AppearanceSettings(
     // DIY stickers have no equivalent slot in the ported Apple Music Player V17
     // layout, so its entry point is hidden rather than left dangling to a
     // customization that would silently never render.
-    val (useAppleMusicPlayer, _) = rememberPreference(UseAppleMusicPlayerKey, defaultValue = false)
+    val (useAppleMusicPlayer, _) = rememberPreference(UseAppleMusicPlayerKey, defaultValue = true)
     val (showAudioQualityBadge, onShowAudioQualityBadgeChange) = rememberPreference(
         ShowAudioQualityBadgeKey,
         defaultValue = true
