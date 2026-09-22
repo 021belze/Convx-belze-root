@@ -643,23 +643,7 @@ fun PlayerV2(
                                         
                                         IconButton(
                                             onClick = {
-                                                if (targetState == PlayerInternalState.QUEUE) {
-                                                    menuState.show {
-                                                        PlayerMenu(
-                                                            mediaMetadata = mediaMetadata,
-                                                            navController = navController,
-                                                            playerBottomSheetState = state,
-                                                            onShowDetailsDialog = {
-                                                                mediaMetadata?.id?.let {
-                                                                    bottomSheetPageState.show {
-                                                                        ShowMediaInfo(it)
-                                                                    }
-                                                                }
-                                                            },
-                                                            onDismiss = menuState::dismiss
-                                                        )
-                                                    }
-                                                } else {
+                                                if (targetState == PlayerInternalState.LYRICS) {
                                                     menuState.show {
                                                         LyricsMenu(
                                                             lyricsProvider = { currentLyrics },
@@ -673,6 +657,22 @@ fun PlayerV2(
                                                                     )
                                                                 }
                                                             }
+                                                        )
+                                                    }
+                                                } else {
+                                                    menuState.show {
+                                                        PlayerMenu(
+                                                            mediaMetadata = mediaMetadata,
+                                                            navController = navController,
+                                                            playerBottomSheetState = state,
+                                                            onShowDetailsDialog = {
+                                                                mediaMetadata?.id?.let {
+                                                                    bottomSheetPageState.show {
+                                                                        ShowMediaInfo(it)
+                                                                    }
+                                                                }
+                                                            },
+                                                            onDismiss = menuState::dismiss
                                                         )
                                                     }
                                                 }

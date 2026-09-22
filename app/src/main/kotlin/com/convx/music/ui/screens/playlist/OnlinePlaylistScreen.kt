@@ -320,9 +320,9 @@ fun OnlinePlaylistScreen(
     // flat empty-capture fallback.
     val heroZoom = rememberHeroZoom()
 
-    val heroSource = rememberHeroSource (
+    val heroSource = rememberHeroSource(
         staticArt = playlist?.thumbnail,
-        songs = songs.map { it.thumbnail to false },
+        songs = remember(songs) { songs.map { it.thumbnail to false } },
     )
     val tint = rememberHeroTint(playlist?.thumbnail)
     val onTint = com.convx.music.ui.theme.AppleTokens.onColor(tint)

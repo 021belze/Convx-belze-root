@@ -14,6 +14,7 @@ import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.layout.Column
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import com.convx.music.ui.utils.appTopBarWindowInsets
@@ -230,6 +231,7 @@ fun BackupAndRestore(
                 )
             )
         )
+        Spacer(modifier = Modifier.height(88.dp))
     }
 
     TopAppBar(

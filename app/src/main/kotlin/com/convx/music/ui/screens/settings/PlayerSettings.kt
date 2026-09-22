@@ -1104,7 +1104,7 @@ fun PlayerSettings(
                 )
             )
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(88.dp))
             }
         }
     }

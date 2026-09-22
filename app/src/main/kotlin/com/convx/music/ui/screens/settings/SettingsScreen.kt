@@ -280,13 +280,6 @@ fun SettingsScreen(
             }
         }
 
-        item(key = "bottom_spacer") {
-            Spacer(
-                Modifier
-                    .height(50.dp)
-                    .windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom))
-            )
-        }
         } else {
             item(key = "search_results") {
                 val results = getAllSearchableSettings()
@@ -317,6 +310,14 @@ fun SettingsScreen(
                     )
                 }
             }
+        }
+
+        item(key = "bottom_spacer") {
+            Spacer(
+                Modifier
+                    .height(88.dp)
+                    .windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom))
+            )
         }
     }
 

@@ -310,7 +310,7 @@ fun CommunityPlaylistCard(
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(modifier = Modifier.weight(1f)) {
                             AsyncImage(
-                                model = item.songs.getOrNull(0)?.thumbnail?.resize(544, 544),
+                                model = item.songs.getOrNull(0)?.thumbnail?.resize(200, 200),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -318,7 +318,7 @@ fun CommunityPlaylistCard(
                                     .fillMaxSize()
                             )
                             AsyncImage(
-                                model = item.songs.getOrNull(1)?.thumbnail?.resize(544, 544),
+                                model = item.songs.getOrNull(1)?.thumbnail?.resize(200, 200),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -328,7 +328,7 @@ fun CommunityPlaylistCard(
                         }
                         Row(modifier = Modifier.weight(1f)) {
                             AsyncImage(
-                                model = item.songs.getOrNull(2)?.thumbnail?.resize(544, 544),
+                                model = item.songs.getOrNull(2)?.thumbnail?.resize(200, 200),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -336,7 +336,7 @@ fun CommunityPlaylistCard(
                                     .fillMaxSize()
                             )
                             AsyncImage(
-                                model = item.songs.getOrNull(3)?.thumbnail?.resize(544, 544),
+                                model = item.songs.getOrNull(3)?.thumbnail?.resize(200, 200),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -1238,8 +1238,7 @@ fun HomeScreen(
                                 end = AppleTokens.Gutter,
                                 top = AppleTokens.ItemGap,
                                 bottom = AppleTokens.TextGap,
-                            )
-                            .animateItem(),
+                            ),
                     )
                 }
 
@@ -1260,7 +1259,6 @@ fun HomeScreen(
                             ) + moodChips.map { chip -> chip to chip.title },
                             currentValue = selectedChip,
                             onValueUpdate = { chip -> viewModel.toggleChip(chip) },
-                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -1365,9 +1363,7 @@ fun HomeScreen(
                 // immediately, so the placeholder still appears for every real load.
                 if (isLoading) {
                     item(key = "loading_shimmer", contentType = "shimmer") {
-                        ShimmerHost(
-                            modifier = Modifier.animateItem()
-                        ) {
+                        ShimmerHost {
                             repeat(2) {
                                 TextPlaceholder(
                                     height = 36.dp,
@@ -1603,8 +1599,7 @@ private fun LazyListScope.localHomeContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = AppleTokens.Gutter)
-                .animateItem(),
+                .padding(horizontal = AppleTokens.Gutter),
             horizontalArrangement = Arrangement.spacedBy(AppleTokens.ItemGap),
         ) {
             Button(
@@ -1782,7 +1777,6 @@ private fun LazyListScope.localSongShelf(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(SpotlightCardHeight)
-                .animateItem()
                 .bleedStart(deps.sideInset),
         ) {
             items(songs, key = { it.id }, contentType = { "spotlight_card" }) { song ->
@@ -1866,8 +1860,7 @@ private fun LazyListScope.heroSection(
                     )
                 },
                 modifier = Modifier
-                    .padding(horizontal = AppleTokens.Gutter)
-                    .animateItem(),
+                    .padding(horizontal = AppleTokens.Gutter),
             )
         }
     }
@@ -1929,8 +1922,7 @@ private fun LazyListScope.speedDialSection(
             Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .animateItem(),
+                        .fillMaxWidth(),
             ) {
                 HorizontalPager(
                     state = pagerState,
@@ -2148,7 +2140,7 @@ private fun LazyListScope.quickPicksSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(ListItemHeight * QuickPicksGridRows)
-                    .animateItem().bleedStart(deps.sideInset)
+                    .bleedStart(deps.sideInset)
             ) {
                 itemsIndexed(
                     items = distinctQuickPicks,
@@ -2230,7 +2222,7 @@ private fun LazyListScope.communityPlaylistsSection(
             LazyRow(
                 contentPadding = PaddingValues(horizontal = AppleTokens.Gutter).plusStart(deps.sideInset),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.animateItem().bleedStart(deps.sideInset)
+                modifier = Modifier.bleedStart(deps.sideInset)
             ) {
                 items(items = playlists, key = { it.playlist.id }) { item ->
                     CommunityPlaylistCard(
@@ -2349,8 +2341,7 @@ private fun LazyListScope.keepListeningSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = AppleTokens.Gutter)
-                        .animateItem(),
+                        .padding(horizontal = AppleTokens.Gutter),
                     horizontalArrangement = Arrangement.spacedBy(AppleTokens.ItemGap),
                 ) {
                     Box(Modifier.weight(1f)) { deps.localGridItem(hero) }
@@ -2392,7 +2383,6 @@ private fun LazyListScope.keepListeningSection(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(SpotlightCardHeight)
-                        .animateItem()
                         .bleedStart(deps.sideInset),
                 ) {
                     items(
@@ -2474,7 +2464,7 @@ private fun LazyListScope.accountPlaylistsSection(
                 contentPadding = WindowInsets.systemBars
                     .only(WindowInsetsSides.Horizontal)
                     .asPaddingValues().plusStart(deps.sideInset),
-                modifier = Modifier.animateItem().bleedStart(deps.sideInset)
+                modifier = Modifier.bleedStart(deps.sideInset)
             ) {
                 items(
                     items = distinctAccountPlaylists,
@@ -2528,7 +2518,7 @@ private fun LazyListScope.forgottenFavoritesSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(ListItemHeight * rows)
-                    .animateItem().bleedStart(deps.sideInset)
+                    .bleedStart(deps.sideInset)
             ) {
                 itemsIndexed(
                     items = distinctForgottenFavorites,
@@ -2637,7 +2627,7 @@ private fun LazyListScope.similarRecommendationsSection(
                 contentPadding = WindowInsets.systemBars
                     .only(WindowInsetsSides.Horizontal)
                     .asPaddingValues().plusStart(deps.sideInset),
-                modifier = Modifier.animateItem().bleedStart(deps.sideInset)
+                modifier = Modifier.bleedStart(deps.sideInset)
             ) {
                 items(items = recommendation.items, key = { it.id }) { item ->
                     deps.ytGridItem(item)
@@ -2721,7 +2711,7 @@ private fun LazyListScope.homePageSection(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(ListItemHeight * SongGridRows)
-                        .animateItem().bleedStart(deps.sideInset)
+                        .bleedStart(deps.sideInset)
                 ) {
                     itemsIndexed(
                         items = distinctSectionSongs,
@@ -2785,7 +2775,7 @@ private fun LazyListScope.homePageSection(
                     contentPadding = WindowInsets.systemBars
                         .only(WindowInsetsSides.Horizontal)
                         .asPaddingValues().plusStart(deps.sideInset),
-                    modifier = Modifier.animateItem().bleedStart(deps.sideInset)
+                    modifier = Modifier.bleedStart(deps.sideInset)
                 ) {
                     items(items = sectionData.items, key = { it.id }) { item ->
                         deps.ytGridItem(item)
@@ -2832,7 +2822,6 @@ private fun LazyListScope.moodAndGenresSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(cardHeight * 2 + gap)
-                    .animateItem()
                     .bleedStart(deps.sideInset),
             ) {
                 items(items = moodAndGenres, key = { it.title }) {
