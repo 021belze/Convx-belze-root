@@ -168,17 +168,19 @@ fun LibraryMixScreen(
     val customBackground = hasCustomHomeBackground()
     val heroArtworkVisible = !customBackground
 
-    val heroUrl = if (libraryBackgroundMode == LibraryBackgroundMode.THUMBNAIL_BLUR && heroArtworkVisible) {
-        (albums + artists + playlists).firstOrNull()?.let {
-            when (it) {
-                is Album -> it.album.thumbnailUrl
-                is Artist -> it.artist.thumbnailUrl
-                is Playlist -> it.thumbnails.firstOrNull()
-                else -> null
+    val heroUrl = remember(albums, artists, playlists, libraryBackgroundMode, heroArtworkVisible) {
+        if (libraryBackgroundMode == LibraryBackgroundMode.THUMBNAIL_BLUR && heroArtworkVisible) {
+            (albums + artists + playlists).firstOrNull()?.let {
+                when (it) {
+                    is Album -> it.album.thumbnailUrl
+                    is Artist -> it.artist.thumbnailUrl
+                    is Playlist -> it.thumbnails.firstOrNull()
+                    else -> null
+                }
             }
+        } else {
+            null
         }
-    } else {
-        null
     }
     val heroSource = rememberHeroSource(staticArt = heroUrl)
     // Shared resolver, so Library falls back the same way Home and Search do instead of
@@ -283,7 +285,7 @@ fun LibraryMixScreen(
                             }
                         }
                 }.reversed(sortDescending)
-            items
+            items.distinctBy { it.id }
         }
 
     val coroutineScope = rememberCoroutineScope()
@@ -459,8 +461,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             }
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
                         }
@@ -494,8 +495,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             }
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
                         }
@@ -529,8 +529,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             }
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
                         }
@@ -564,8 +563,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             }
-                                        )
-                                        .animateItem(),
+                                        ),
                             )
                         }
                     }
@@ -599,8 +597,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             }
-                                        )
-                                        .animateItem(),
+                                        ),
                             )
                         }
                     }
@@ -634,14 +631,13 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             }
-                                        )
-                                        .animateItem(),
+                                        ),
                             )
                         }
                     }
 
                     items(
-                        items = allItems.distinctBy { it.id },
+                        items = allItems,
                         key = { it.id },
                         contentType = { CONTENT_TYPE_PLAYLIST },
                     ) { item ->
@@ -686,8 +682,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             },
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
 
@@ -731,8 +726,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             },
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
 
@@ -778,8 +772,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             },
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
 
@@ -1021,7 +1014,7 @@ fun LibraryMixScreen(
                     }
 
                     items(
-                        items = allItems.distinctBy { it.id },
+                        items = allItems,
                         key = { it.id },
                         contentType = { CONTENT_TYPE_PLAYLIST },
                     ) { item ->
@@ -1048,8 +1041,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             },
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
 
@@ -1075,8 +1067,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             },
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
 
@@ -1105,8 +1096,7 @@ fun LibraryMixScreen(
                                                     )
                                                 }
                                             },
-                                        )
-                                        .animateItem(),
+                                        ),
                                 )
                             }
 

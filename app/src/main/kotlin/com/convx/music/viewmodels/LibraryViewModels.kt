@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -389,46 +389,49 @@ constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
+            val processedAlbums = mutableSetOf<String>()
             albums.collect { albums ->
-                albums
-                    .filter {
-                        it.album.songCount == 0 && !it.album.isLocal
-                    }.forEach { album ->
-                        YouTube
-                            .album(album.id)
-                            .onSuccess { albumPage ->
+                val toUpdate = albums.filter {
+                    it.album.songCount == 0 && !it.album.isLocal && processedAlbums.add(it.id)
+                }
+                toUpdate.forEach { album ->
+                    YouTube
+                        .album(album.id)
+                        .onSuccess { albumPage ->
+                            database.query {
+                                update(album.album, albumPage, album.artists)
+                            }
+                        }.onFailure {
+                            reportException(it)
+                            if (it.message?.contains("NOT_FOUND") == true) {
                                 database.query {
-                                    update(album.album, albumPage, album.artists)
-                                }
-                            }.onFailure {
-                                reportException(it)
-                                if (it.message?.contains("NOT_FOUND") == true) {
-                                    database.query {
-                                        delete(album.album)
-                                    }
+                                    delete(album.album)
                                 }
                             }
-                    }
+                        }
+                }
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
+            val processedArtists = mutableSetOf<String>()
             artists.collect { artists ->
-                artists
+                val toUpdate = artists
                     .map { it.artist }
                     .filter { !it.isLocal }
                     .filter {
-                        it.thumbnailUrl == null ||
+                        (it.thumbnailUrl == null ||
                                 Duration.between(
                                     it.lastUpdateTime,
                                     LocalDateTime.now(),
-                                ) > Duration.ofDays(10)
-                    }.forEach { artist ->
-                        YouTube.artist(artist.id).onSuccess { artistPage ->
-                            database.query {
-                                update(artist, artistPage)
-                            }
+                                ) > Duration.ofDays(10)) && processedArtists.add(it.id)
+                    }
+                toUpdate.forEach { artist ->
+                    YouTube.artist(artist.id).onSuccess { artistPage ->
+                        database.query {
+                            update(artist, artistPage)
                         }
                     }
+                }
             }
         }
     }

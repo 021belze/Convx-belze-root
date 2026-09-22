@@ -292,7 +292,6 @@ fun LibraryAlbumsScreen(
                                 EmptyPlaceholder(
                                     icon = R.drawable.album,
                                     text = stringResource(R.string.library_album_empty),
-                                    modifier = Modifier.animateItem()
                                 )
                             }
                         }
@@ -309,8 +308,6 @@ fun LibraryAlbumsScreen(
                                 isActive = album.id == mediaMetadata?.album?.id,
                                 isPlaying = isPlaying,
                                 showIconOnly = libraryIconsOnly,
-                                modifier = Modifier
-                                    .animateItem()
                             )
                         }
                     }
@@ -354,7 +351,6 @@ fun LibraryAlbumsScreen(
                                 EmptyPlaceholder(
                                     icon = R.drawable.album,
                                     text = stringResource(R.string.library_album_empty),
-                                    modifier = Modifier.animateItem()
                                 )
                             }
                         }
@@ -372,8 +368,6 @@ fun LibraryAlbumsScreen(
                                 isActive = album.id == mediaMetadata?.album?.id,
                                 isPlaying = isPlaying,
                                 showIconOnly = libraryIconsOnly,
-                                modifier = Modifier
-                                    .animateItem()
                             )
                         }
                     }

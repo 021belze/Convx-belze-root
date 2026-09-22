@@ -926,35 +926,37 @@ fun PlaylistListItem(
     thumbnailOverrideUrl: String? = null,
     flat: Boolean = false,
     badges: @Composable RowScope.() -> Unit = {
-        val database = LocalDatabase.current
+        if (!autoPlaylist) {
+            val database = LocalDatabase.current
 
-        val songs by produceState<List<Song>>(initialValue = emptyList(), playlist.id) {
-            withContext(Dispatchers.IO) {
-                value = database.playlistSongs(playlist.id).first().map { it.song }
+            val songs by produceState<List<Song>>(initialValue = emptyList(), playlist.id) {
+                withContext(Dispatchers.IO) {
+                    value = database.playlistSongs(playlist.id).first().map { it.song }
+                }
             }
-        }
 
-        val allDownloads = LocalDownloads.current
+            val allDownloads = LocalDownloads.current
 
-        val downloadState by remember(songs, allDownloads) {
-            derivedStateOf {
-                if (songs.isEmpty()) {
-                    Download.STATE_STOPPED
-                } else {
-                    when {
-                        songs.all { allDownloads[it.id]?.state == STATE_COMPLETED } -> STATE_COMPLETED
-                        songs.any { allDownloads[it.id]?.state in listOf(STATE_QUEUED, STATE_DOWNLOADING) } -> STATE_DOWNLOADING
-                        // Distinguishing this from STOPPED is what makes a failed
-                        // download visible here instead of the row silently looking
-                        // like it was never downloaded at all.
-                        songs.any { allDownloads[it.id]?.state == Download.STATE_FAILED } -> Download.STATE_FAILED
-                        else -> Download.STATE_STOPPED
+            val downloadState by remember(songs, allDownloads) {
+                derivedStateOf {
+                    if (songs.isEmpty()) {
+                        Download.STATE_STOPPED
+                    } else {
+                        when {
+                            songs.all { allDownloads[it.id]?.state == STATE_COMPLETED } -> STATE_COMPLETED
+                            songs.any { allDownloads[it.id]?.state in listOf(STATE_QUEUED, STATE_DOWNLOADING) } -> STATE_DOWNLOADING
+                            // Distinguishing this from STOPPED is what makes a failed
+                            // download visible here instead of the row silently looking
+                            // like it was never downloaded at all.
+                            songs.any { allDownloads[it.id]?.state == Download.STATE_FAILED } -> Download.STATE_FAILED
+                            else -> Download.STATE_STOPPED
+                        }
                     }
                 }
             }
-        }
 
-        Icon.Download(downloadState)
+            Icon.Download(downloadState)
+        }
     },
     trailingContent: @Composable RowScope.() -> Unit = {},
     shape: Shape = androidx.compose.ui.graphics.RectangleShape,
@@ -1042,35 +1044,37 @@ fun PlaylistGridItem(
     // first-song artwork URL) instead of the playlist thumbnails / auto icon.
     thumbnailOverrideUrl: String? = null,
     badges: @Composable RowScope.() -> Unit = {
-        val database = LocalDatabase.current
+        if (!autoPlaylist) {
+            val database = LocalDatabase.current
 
-        val songs by produceState<List<Song>>(initialValue = emptyList(), playlist.id) {
-            withContext(Dispatchers.IO) {
-                value = database.playlistSongs(playlist.id).first().map { it.song }
+            val songs by produceState<List<Song>>(initialValue = emptyList(), playlist.id) {
+                withContext(Dispatchers.IO) {
+                    value = database.playlistSongs(playlist.id).first().map { it.song }
+                }
             }
-        }
 
-        val allDownloads = LocalDownloads.current
+            val allDownloads = LocalDownloads.current
 
-        val downloadState by remember(songs, allDownloads) {
-            derivedStateOf {
-                if (songs.isEmpty()) {
-                    Download.STATE_STOPPED
-                } else {
-                    when {
-                        songs.all { allDownloads[it.id]?.state == STATE_COMPLETED } -> STATE_COMPLETED
-                        songs.any { allDownloads[it.id]?.state in listOf(STATE_QUEUED, STATE_DOWNLOADING) } -> STATE_DOWNLOADING
-                        // Distinguishing this from STOPPED is what makes a failed
-                        // download visible here instead of the row silently looking
-                        // like it was never downloaded at all.
-                        songs.any { allDownloads[it.id]?.state == Download.STATE_FAILED } -> Download.STATE_FAILED
-                        else -> Download.STATE_STOPPED
+            val downloadState by remember(songs, allDownloads) {
+                derivedStateOf {
+                    if (songs.isEmpty()) {
+                        Download.STATE_STOPPED
+                    } else {
+                        when {
+                            songs.all { allDownloads[it.id]?.state == STATE_COMPLETED } -> STATE_COMPLETED
+                            songs.any { allDownloads[it.id]?.state in listOf(STATE_QUEUED, STATE_DOWNLOADING) } -> STATE_DOWNLOADING
+                            // Distinguishing this from STOPPED is what makes a failed
+                            // download visible here instead of the row silently looking
+                            // like it was never downloaded at all.
+                            songs.any { allDownloads[it.id]?.state == Download.STATE_FAILED } -> Download.STATE_FAILED
+                            else -> Download.STATE_STOPPED
+                        }
                     }
                 }
             }
-        }
 
-        Icon.Download(downloadState)
+            Icon.Download(downloadState)
+        }
     },
     fillMaxWidth: Boolean = false,
     showIconOnly: Boolean = false,
