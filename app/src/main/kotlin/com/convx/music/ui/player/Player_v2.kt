@@ -17,6 +17,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -110,24 +112,7 @@ fun PlayerV2(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    // starting landscape not support
-    DisposableEffect(Unit) {
-        val activity = (context as? android.app.Activity) ?: run {
-            var ctx = context
-            while (ctx is android.content.ContextWrapper) {
-                if (ctx is android.app.Activity) break
-                ctx = ctx.baseContext
-            }
-            ctx as? android.app.Activity
-        }
-        val originalOrientation = activity?.requestedOrientation ?: android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        onDispose {
-            activity?.requestedOrientation = originalOrientation
-        }
-    }
-    // ended landscape not support
+    val isLandscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val playerConnection = LocalPlayerConnection.current ?: return
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val isPlaying by playerConnection.isEffectivelyPlaying.collectAsState()
@@ -341,12 +326,13 @@ fun PlayerV2(
                 }
             }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding())
-                .padding(bottom = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding())
-        ) {
+        if (!isLandscape) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding())
+                    .padding(bottom = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding())
+            ) {
             // Minimal drag handle header
             Row(
                 modifier = Modifier
@@ -1024,6 +1010,416 @@ fun PlayerV2(
                         contentDescription = "Queue",
                     )
                 }
+                }
+            }
+        }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            ) {
+                // Left pane: Cover, Lyrics, or Queue
+                androidx.compose.animation.SharedTransitionLayout(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    AnimatedContent(
+                        targetState = playerState,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(600, easing = FastOutSlowInEasing)) togetherWith 
+                            fadeOut(animationSpec = tween(600, easing = FastOutSlowInEasing))
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        label = "LandscapeInternalWindow"
+                    ) { targetState ->
+                        when (targetState) {
+                            PlayerInternalState.COVER -> {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight(0.92f)
+                                            .aspectRatio(1f)
+                                            .customSoftShadow(
+                                                elevation = playerThumbnailShadowElevation.dp, 
+                                                cornerRadius = 16.dp, 
+                                                enabled = showPlayerThumbnailShadow
+                                            )
+                                            .background(adaptiveSurface, RoundedCornerShape(16.dp))
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .SwipeGesture(
+                                                enabled = (playerState == PlayerInternalState.COVER && !isListenTogetherGuest),
+                                                onSwipeLeft = { if (canSkipNext) playerConnection.player.seekToNext() },
+                                                onSwipeRight = { if (canSkipPrevious) playerConnection.player.seekToPrevious() }
+                                            )
+                                    ) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(mediaMetadata?.thumbnailUrl?.resize(1200, 1200))
+                                                .size(CoilSize.ORIGINAL)
+                                                .crossfade(true)
+                                                .build(),
+                                            contentDescription = "Cover Art",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        PlayerV2Canvas(
+                                            mediaMetadata = mediaMetadata,
+                                            isPlaying = isPlaying,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        DiyStickerLayer(
+                                            layout = diyLayout,
+                                            orientation = DiyOrientation.LANDSCAPE,
+                                        )
+                                    }
+                                }
+                            }
+                            PlayerInternalState.LYRICS -> {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    Lyrics(
+                                        sliderPositionProvider = { sliderPosition ?: position },
+                                        showLyrics = true,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                            PlayerInternalState.QUEUE -> {
+                                val queueSheetState = rememberBottomSheetState(
+                                    dismissedBound = 0.dp,
+                                    expandedBound = LocalConfiguration.current.screenHeightDp.dp,
+                                    initialAnchor = expandedAnchor,
+                                )
+                                Queue(
+                                    state = queueSheetState,
+                                    playerBottomSheetState = state,
+                                    navController = navController,
+                                    background = Color.Transparent,
+                                    onBackgroundColor = adaptivePrimary,
+                                    TextBackgroundColor = adaptivePrimary,
+                                    textButtonColor = adaptivePrimary,
+                                    iconButtonColor = adaptivePrimary,
+                                    pureBlack = false,
+                                    showInlineLyrics = false,
+                                    playerBackground = playerBackground,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Right pane: Meta, Controls, Slider, Volume
+                Column(
+                    modifier = Modifier
+                        .weight(1.15f)
+                        .fillMaxHeight()
+                        .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Header Row: Collapse handle + Lyrics toggle + Queue toggle + Cast/Bluetooth + Options
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(adaptivePrimary.copy(alpha = 0.35f))
+                                .clickable { state.collapseSoft() }
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val isLyricsActive = playerState == PlayerInternalState.LYRICS
+                            IconButton(
+                                onClick = { playerState = if (isLyricsActive) PlayerInternalState.COVER else PlayerInternalState.LYRICS }
+                            ) {
+                                PlayerGlyph(
+                                    slot = PlayerIconSlot.V2_LYRICS,
+                                    fallback = R.drawable.apple_lyrics,
+                                    tint = if (isLyricsActive) adaptivePrimary else adaptiveSecondary,
+                                    modifier = Modifier.size(24.dp),
+                                    contentDescription = "Lyrics",
+                                )
+                            }
+
+                            val isQueueActive = playerState == PlayerInternalState.QUEUE
+                            IconButton(
+                                onClick = { playerState = if (isQueueActive) PlayerInternalState.COVER else PlayerInternalState.QUEUE }
+                            ) {
+                                PlayerGlyph(
+                                    slot = PlayerIconSlot.V2_QUEUE,
+                                    fallback = R.drawable.apple_queue,
+                                    tint = if (isQueueActive) adaptivePrimary else adaptiveSecondary,
+                                    modifier = Modifier.size(24.dp),
+                                    contentDescription = "Queue",
+                                )
+                            }
+
+                            if (bluetoothDeviceName != null) {
+                                IconButton(onClick = { showAudioDeviceBottomSheet = true }) {
+                                    Icon(
+                                        Icons.Default.Bluetooth, 
+                                        contentDescription = "Audio Device", 
+                                        tint = adaptiveSecondary, 
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            } else if (BuildConfig.CAST_AVAILABLE && enableGoogleCast) {
+                                CastButton(
+                                    modifier = Modifier.size(36.dp),
+                                    tintColor = adaptiveSecondary,
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    menuState.show {
+                                        PlayerMenu(
+                                            mediaMetadata = mediaMetadata,
+                                            navController = navController,
+                                            playerBottomSheetState = state,
+                                            onShowDetailsDialog = {
+                                                mediaMetadata?.id?.let {
+                                                    bottomSheetPageState.show {
+                                                        ShowMediaInfo(it)
+                                                    }
+                                                }
+                                            },
+                                            onDismiss = menuState::dismiss
+                                        )
+                                    }
+                                }
+                            ) {
+                                PlayerGlyph(
+                                    slot = PlayerIconSlot.V2_MORE,
+                                    fallback = R.drawable.more_horiz,
+                                    tint = adaptivePrimary,
+                                    modifier = Modifier.size(24.dp),
+                                    contentDescription = "Options",
+                                )
+                            }
+                        }
+                    }
+
+                    // Track Meta Info
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                mediaMetadata?.title ?: "Unknown",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = adaptivePrimary,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clickable {
+                                    state.collapseSoft()
+                                    mediaMetadata?.album?.id?.let { navController.navigate("album/$it") }
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                mediaMetadata?.artists?.firstOrNull()?.name ?: "Unknown",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = adaptiveSecondary,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clickable {
+                                    state.collapseSoft()
+                                    mediaMetadata?.artists?.firstOrNull()?.id?.let { navController.navigate("artist/$it") }
+                                }
+                            )
+                        }
+
+                        val isLiked = currentSong?.song?.liked == true
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(adaptivePrimary.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(onClick = playerConnection::toggleLike) {
+                                PlayerGlyph(
+                                    slot = if (isLiked) PlayerIconSlot.V2_LIKED else PlayerIconSlot.V2_LIKE,
+                                    fallback = if (isLiked) R.drawable.favorite else R.drawable.favorite_border,
+                                    tint = adaptivePrimary,
+                                    contentDescription = "Like",
+                                )
+                            }
+                        }
+                    }
+
+                    // Timeline Slider & Timestamps
+                    val currentPos = sliderPosition ?: position
+                    val trackInteractionSource = remember { MutableInteractionSource() }
+                    val isTrackDragged by trackInteractionSource.collectIsDraggedAsState()
+                    val isTrackPressed by trackInteractionSource.collectIsPressedAsState()
+                    val isTrackActive = isTrackDragged || isTrackPressed
+                    val trackHeight by animateDpAsState(
+                        targetValue = if (isTrackActive) 10.dp else 5.dp,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                        label = "trackScaleLandscape"
+                    )
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Slider(
+                            value = currentPos.toFloat(),
+                            valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                            onValueChange = { value ->
+                                if (!isListenTogetherGuest) {
+                                    sliderPosition = value.toLong()
+                                }
+                            },
+                            onValueChangeFinished = {
+                                if (!isListenTogetherGuest) {
+                                    sliderPosition?.let { pos ->
+                                        playerConnection.player.seekTo(pos)
+                                        position = pos
+                                        sliderPosition = null
+                                    }
+                                }
+                            },
+                            enabled = !isListenTogetherGuest,
+                            interactionSource = trackInteractionSource,
+                            thumb = { Spacer(modifier = Modifier.size(0.dp)) },
+                            track = { sliderState ->
+                                PlayerSliderTrack(
+                                    sliderState = sliderState,
+                                    trackHeight = trackHeight,
+                                    colors = PlayerSliderColors.getSliderColors(
+                                        activeColor = adaptivePrimary.copy(alpha = 0.8f)
+                                    )
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth().height(16.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(makeTimeString(currentPos), color = adaptiveSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            AudioQualityBadge(playerConnection, adaptivePrimary, isPlaying)
+                            Text("-" + makeTimeString(maxOf(0L, duration - currentPos)), color = adaptiveSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Playback Controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { if (!isListenTogetherGuest && canSkipPrevious) playerConnection.player.seekToPrevious() },
+                            enabled = !isListenTogetherGuest && canSkipPrevious,
+                            modifier = Modifier.size(48.dp).alpha(if (isListenTogetherGuest || !canSkipPrevious) 0.4f else 1f)
+                        ) {
+                            PlayerGlyph(
+                                slot = PlayerIconSlot.V2_PREVIOUS,
+                                fallback = R.drawable.apple_skip_previous,
+                                tint = adaptivePrimary,
+                                modifier = Modifier.size(36.dp),
+                                contentDescription = "Previous",
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (isListenTogetherGuest) {
+                                    playerConnection.toggleMute()
+                                } else {
+                                    playerConnection.player.togglePlayPause()
+                                }
+                            },
+                            modifier = Modifier.size(60.dp)
+                        ) {
+                            if (isListenTogetherGuest) {
+                                Icon(
+                                    imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                    contentDescription = if (isMuted) "Unmute" else "Mute",
+                                    modifier = Modifier.size(44.dp),
+                                    tint = adaptivePrimary
+                                )
+                            } else {
+                                PlayerGlyph(
+                                    slot = if (isPlaying) PlayerIconSlot.V2_PAUSE else PlayerIconSlot.V2_PLAY,
+                                    fallback = if (isPlaying) R.drawable.pause_applemusic else R.drawable.play_applemusic,
+                                    tint = adaptivePrimary,
+                                    modifier = Modifier.size(54.dp),
+                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { if (!isListenTogetherGuest && canSkipNext) playerConnection.player.seekToNext() },
+                            enabled = !isListenTogetherGuest && canSkipNext,
+                            modifier = Modifier.size(48.dp).alpha(if (isListenTogetherGuest || !canSkipNext) 0.4f else 1f)
+                        ) {
+                            PlayerGlyph(
+                                slot = PlayerIconSlot.V2_NEXT,
+                                fallback = R.drawable.apple_skip_next,
+                                tint = adaptivePrimary,
+                                modifier = Modifier.size(36.dp),
+                                contentDescription = "Next",
+                            )
+                        }
+                    }
+
+                    // Volume Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.VolumeMute, contentDescription = "Volume Down", tint = adaptiveSecondary, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val volumeInteractionSource = remember { MutableInteractionSource() }
+                        val isVolDragged by volumeInteractionSource.collectIsDraggedAsState()
+                        val isVolPressed by volumeInteractionSource.collectIsPressedAsState()
+                        val isVolActive = isVolDragged || isVolPressed
+                        val volHeight by animateDpAsState(
+                            targetValue = if (isVolActive) 10.dp else 5.dp,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "volHeightLandscape"
+                        )
+                        Slider(
+                            value = if (isVolActive) systemVolume else animatedVolume,
+                            onValueChange = { newValue ->
+                                systemVolume = newValue
+                                val targetVolume = (newValue * maxSystemVolume).toInt()
+                                audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetVolume, 0)
+                            },
+                            interactionSource = volumeInteractionSource,
+                            thumb = { Spacer(modifier = Modifier.size(0.dp)) },
+                            track = { sliderState ->
+                                PlayerSliderTrack(
+                                    sliderState = sliderState,
+                                    trackHeight = volHeight,
+                                    colors = PlayerSliderColors.getSliderColors(
+                                        activeColor = adaptivePrimary.copy(alpha = 0.8f)
+                                    )
+                                )
+                            },
+                            modifier = Modifier.weight(1f).height(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.VolumeUp, contentDescription = "Volume Up", tint = adaptiveSecondary, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }

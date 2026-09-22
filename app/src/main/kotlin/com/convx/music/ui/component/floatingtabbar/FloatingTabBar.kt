@@ -96,6 +96,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -829,6 +830,8 @@ private fun SharedTransitionScope.ExpandedBar(
             )
         }
 
+        var searchScaleProvider by remember { mutableStateOf<(() -> Float)?>(null) }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(sizes.componentSpacing),
             verticalAlignment = Alignment.CenterVertically,
@@ -852,6 +855,7 @@ private fun SharedTransitionScope.ExpandedBar(
                     tabBarContentModifier = tabBarContentModifier,
                     backdrop = backdrop,
                     accentColor = accentColor ?: colors.backgroundColor,
+                    onScaleProviderChanged = { searchScaleProvider = it },
                     modifier = Modifier
                 )
             }
@@ -865,6 +869,7 @@ private fun SharedTransitionScope.ExpandedBar(
                     elevations = elevations,
                     animatedVisibilityScope = animatedVisibilityScope,
                     tabBarContentModifier = tabBarContentModifier,
+                    scaleProvider = searchScaleProvider,
                     modifier = Modifier
                         // Same floor the inline row already needed: IntrinsicSize.Max
                         // can under-report the tab group's real height, and without a
@@ -994,7 +999,8 @@ private fun SharedTransitionScope.ExpandedStandaloneTab(
     elevations: FloatingTabBarElevations,
     animatedVisibilityScope: AnimatedVisibilityScope,
     modifier: Modifier,
-    tabBarContentModifier: Modifier
+    tabBarContentModifier: Modifier,
+    scaleProvider: (() -> Float)? = null,
 ) {
     // Same finger-tracking glow as the keyboard-active search pill
     // (NavBarSearchInputBar) — a soft radial light following the touch point.
@@ -1007,6 +1013,18 @@ private fun SharedTransitionScope.ExpandedStandaloneTab(
         isInline = true,
         isStandalone = true,
         modifier = modifier
+            .then(
+                if (scaleProvider != null) {
+                    Modifier.graphicsLayer {
+                        val s = scaleProvider()
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    }
+                } else {
+                    Modifier
+                }
+            )
             .sharedElement(
                 sharedContentState = rememberSharedContentState("standaloneTab"),
                 animatedVisibilityScope = animatedVisibilityScope,
@@ -1085,7 +1103,8 @@ private fun SharedTransitionScope.ExpandedTabs(
     modifier: Modifier,
     tabBarContentModifier: Modifier,
     backdrop: Backdrop?,
-    accentColor: Color
+    accentColor: Color,
+    onScaleProviderChanged: ((() -> Float) -> Unit)? = null,
 ) {
     // The standalone tab (e.g. search) never appears here — it's always its
     // own floating circle, rendered as a sibling by ExpandedBar (see
@@ -1269,6 +1288,20 @@ private fun SharedTransitionScope.ExpandedTabs(
         )
     }
 
+    LaunchedEffect(dampedDragAnimation, tabsCount, isLtr) {
+        onScaleProviderChanged?.invoke {
+            val pos = dampedDragAnimation.value
+            val lastIndex = (tabsCount - 1).toFloat()
+            val proximity = if (isLtr) {
+                (pos - (lastIndex - 1f)).coerceIn(0f, 1f)
+            } else {
+                (1f - pos).coerceIn(0f, 1f)
+            }
+            val press = dampedDragAnimation.pressProgress
+            (1f - (0.22f * proximity) - (0.06f * proximity * press)).coerceIn(0.70f, 1f)
+        }
+    }
+
     // Invisible tinted copy of the tabs, sampled by the puck below so the
     // selected icon shows through the glass in the accent color.
     val tabsBackdrop = rememberLayerBackdrop()
@@ -1276,7 +1309,6 @@ private fun SharedTransitionScope.ExpandedTabs(
     Box(
         modifier
             .width(with(density) { totalWidthPx.toDp() })
-            .clip(shapes.tabBarShape)
     ) {
         Row(
             Modifier
