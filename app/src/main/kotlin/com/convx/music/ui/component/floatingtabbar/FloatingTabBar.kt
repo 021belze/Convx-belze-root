@@ -45,7 +45,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.LocalIndication
@@ -216,7 +215,6 @@ fun FloatingTabBar(
     // to filling available space (e.g. first-ever composition in search mode).
     expandedContentWidthPx: Int? = null,
     onExpandedWidthChanged: ((Int) -> Unit)? = null,
-    onTransitionActiveChanged: ((Boolean) -> Unit)? = null,
     content: FloatingTabBarScope.() -> Unit
 ) {
     // Rebuilt every composition, deliberately not remembered. The tabs hold
@@ -240,10 +238,6 @@ fun FloatingTabBar(
     // the transition object is available here to drive the gooey blur pulse,
     // not just inside the content lambda.
     val transition = updateTransition(targetState = visual, label = "floatingTabBarVisual")
-    val isTransitioning = transition.currentState != transition.targetState
-    LaunchedEffect(isTransitioning) {
-        onTransitionActiveChanged?.invoke(isTransitioning)
-    }
     val gooeyBlurPx = with(LocalDensity.current) { GooeyPeakBlur.toPx() }
     // Liquid "gooey" merge/split (see GooeyTransition.kt): peaks mid-crossfade
     // and returns to 0 at rest, on every transition regardless of direction —
@@ -279,12 +273,8 @@ fun FloatingTabBar(
             Box {
                 transition.AnimatedContent(
                     transitionSpec = {
-                        (fadeIn(tween(220, easing = FastOutSlowInEasing)) togetherWith
-                            fadeOut(tween(180, easing = FastOutSlowInEasing))).using(
-                            SizeTransform(clip = false) { _, _ ->
-                                spring(dampingRatio = 0.85f, stiffness = 380f)
-                            }
-                        )
+                        fadeIn(tween(220, easing = FastOutSlowInEasing)) togetherWith
+                            fadeOut(tween(180, easing = FastOutSlowInEasing))
                     },
                     contentAlignment = Alignment.BottomCenter
                 ) { targetVisual ->
@@ -1127,10 +1117,9 @@ private fun SharedTransitionScope.ExpandedTabs(
     // Puck wash. Unset follows the theme rather than assuming a dark bar: a light
     // scheme gets a light wash, so the pill still reads as a raised surface instead
     // of a black patch.
-    val isLightTheme = MaterialTheme.colorScheme.surface.luminance() > 0.5f
     val puckWash = if (glassConfig.puckColor.isSpecified) {
         glassConfig.puckColor
-    } else if (isLightTheme) {
+    } else if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
         Color(0xFFF2F2F2)
     } else {
         Color(28, 27, 28)
@@ -1307,10 +1296,7 @@ private fun SharedTransitionScope.ExpandedTabs(
     // selected icon shows through the glass in the accent color.
     val tabsBackdrop = rememberLayerBackdrop()
 
-    Box(
-        modifier
-            .width(with(density) { totalWidthPx.toDp() })
-    ) {
+    Box(modifier.width(with(density) { totalWidthPx.toDp() })) {
         Row(
             Modifier
                 .fillMaxSize()
@@ -1509,23 +1495,44 @@ private fun SharedTransitionScope.ExpandedTabs(
                             effects = {
                                 val progress = dampedDragAnimation.pressProgress
                                 // Soft frosted puck at rest (constant blur), deepening
+                                //
                                 blur(3f.dp.toPx() * (1f - progress))
 
-                                val bend = ((progress - 0.2f) / 0.8f).fastCoerceIn(0f, 1f)
+                                // Refraction is weakest at REST and deepens while the
+                                // puck is held and dragged: at rest the sharp overlay
+                                // icon sits on top at full alpha, and any real bend
+                                // there splits it from its lensed copy underneath —
+                                // the doubled/ghosted icon. That overlay fades out
+                                // over the first third of the press ramp, so by the
+                                // time the bend is at full strength there is only one
+                                // copy left to warp.
                                 lens(
-                                    lerp(28f.dp.toPx(), 44f.dp.toPx(), bend),
-                                    lerp(24f.dp.toPx(), 38f.dp.toPx(), bend),
-                                    chromaticAberration = true
+                                    lerp(0f.dp.toPx(), 10f.dp.toPx(), progress),
+                                    lerp(0f.dp.toPx(), 12f.dp.toPx(), progress),
+                                    // Dispersion is a drag-only flourish. It costs a
+                                    // second, heavier shader, so a puck sitting still
+                                    // should not be paying for it.
+                                    chromaticAberration = progress > 0.01f
                                 )
                             },
                             highlight = {
                                 val progress = dampedDragAnimation.pressProgress
+                                // Floored, not 0-at-rest. With no rim the puck's
+                                // shape came entirely from its dark wash below,
+                                // so it vanished into the bar whenever the bar
+                                // itself sat on dark content. A specular rim
+                                // reads against light AND dark, and unlike
+                                // lightening the wash it leaves the selected
+                                // icon (white by default, drawn on top) legible.
                                 Highlight.Default.copy(
-                                    alpha = lerp(0.85f, 1f, progress)
+                                    alpha = lerp(PuckRestHighlightAlpha, 1f, progress)
                                 )
                             },
                             shadow = {
                                 val progress = dampedDragAnimation.pressProgress
+                                // Same reasoning: a little separation at rest so
+                                // the puck reads as a raised element rather than
+                                // a flat patch of the bar.
                                 Shadow(alpha = lerp(PuckRestShadowAlpha, 1f, progress))
                             },
                             innerShadow = {
@@ -1540,16 +1547,21 @@ private fun SharedTransitionScope.ExpandedTabs(
                                 scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
                             },
                             onDrawSurface = {
+                                // What shows inside the puck is the hidden tinted tab
+                                // row sampled back through this glass, so anything
+                                // painted here lands ON TOP of the selected icon.
+                                // Black at any real strength crushes it — hence an
+                                // accent wash that defines the pill's shape while
+                                // leaving the icon at full strength, deepening only
+                                // while pressed.
                                 val progress = dampedDragAnimation.pressProgress
-                                val isDark = !isLightTheme
-                                val washColor = if (puckWash.isSpecified && puckWash != Color(28, 27, 28) && puckWash != Color(0xFFF2F2F2)) {
-                                    puckWash.copy(alpha = puckRestAlpha * 0.35f * (1f - 0.75f * progress))
-                                } else {
-                                    if (isDark) Color.White.copy(alpha = 0.12f * (1f - 0.75f * progress))
-                                    else Color.Black.copy(alpha = 0.08f * (1f - 0.75f * progress))
-                                }
-                                drawRect(washColor)
-                                drawRect(Color.Black.copy(alpha = 0.04f * progress))
+
+                                // Was a hardcoded near-black at 0.8 alpha, which on a
+                                // dark bar made the whole puck read as a dark blob and
+                                // on a light theme was simply wrong. Colour and resting
+                                // opacity are configurable now, and the unset default
+                                // follows the theme instead of assuming dark.
+                                drawRect(puckWash.copy(alpha = puckRestAlpha * (1f - 0.75f * progress)))
                             },
                             frozen = LocalTabBarBackdropFrozen.current
                         )

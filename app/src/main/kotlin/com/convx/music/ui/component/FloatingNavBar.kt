@@ -224,7 +224,6 @@ private fun AppFloatingNavBarChrome(
     // the switch into search mode so the bar doesn't visibly widen — search
     // mode's row targets this same width instead of filling all available space.
     var expandedContentWidthPx by remember { mutableStateOf<Int?>(null) }
-    var isBarTransitioning by remember { mutableStateOf(false) }
 
     val glassConfig = LocalGlassEffectConfig.current
     val useGlass = glassConfig.isEnabledFor(GlassComponent.NAV_BAR) && isGlassAllowed()
@@ -261,7 +260,6 @@ private fun AppFloatingNavBarChrome(
     val selectedContentColor = tabTextColor
     val unselectedContentColor = tabTextColor.copy(alpha = 0.6f)
 
-    val localTabBarFrozen = LocalTabBarBackdropFrozen.current
     val tabBarContentModifier = if (useGlass) {
         Modifier.liquidGlass(
             config = glassConfig,
@@ -270,7 +268,7 @@ private fun AppFloatingNavBarChrome(
             // The bar's own surface is the largest of its glass layers, and its
             // bounds animate across the whole inline/expanded/search transition —
             // freezing its capture for those frames is most of the win.
-            frozen = { localTabBarFrozen() || isBarTransitioning || navSearch.query.text.isNotEmpty() },
+            frozen = LocalTabBarBackdropFrozen.current,
         )
     } else {
         Modifier
@@ -361,7 +359,6 @@ private fun AppFloatingNavBarChrome(
                 tabExpandedContentPadding = PaddingValues(vertical = 4.dp, horizontal = 6.dp),
                 tabInlineContentPadding = PaddingValues(8.dp),
                 tabWidth = tabWidth,
-                componentSpacing = 10.dp,
             ),
             // The selection puck's lens/accent-tint effects only make sense when the
             // bar itself is sampling the app backdrop through liquid glass.
@@ -390,7 +387,6 @@ private fun AppFloatingNavBarChrome(
             },
             expandedContentWidthPx = expandedContentWidthPx,
             onExpandedWidthChanged = { expandedContentWidthPx = it },
-            onTransitionActiveChanged = { isBarTransitioning = it },
         ) {
             tabScreens.forEach { screen ->
                 val isSelected = screen.route == selectedTabKey
