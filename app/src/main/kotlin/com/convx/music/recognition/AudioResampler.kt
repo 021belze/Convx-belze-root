@@ -69,11 +69,22 @@ object AudioResampler {
             sonic.flush()
 
             val inputBuf = ByteBuffer.wrap(decodedAudio.data).order(ByteOrder.nativeOrder())
-            sonic.queueInput(inputBuf)
-            sonic.queueEndOfStream()
-
             val outputChunks = mutableListOf<ByteArray>()
             var outputChunksByteSize = 0
+
+            while (inputBuf.hasRemaining()) {
+                ensureActive()
+                sonic.queueInput(inputBuf)
+                while (true) {
+                    val outputBuffer = sonic.output
+                    if (!outputBuffer.hasRemaining()) break
+                    val chunk = ByteArray(outputBuffer.remaining())
+                    outputBuffer.get(chunk)
+                    outputChunks.add(chunk)
+                    outputChunksByteSize += chunk.size
+                }
+            }
+            sonic.queueEndOfStream()
 
             while (!sonic.isEnded) {
                 ensureActive()

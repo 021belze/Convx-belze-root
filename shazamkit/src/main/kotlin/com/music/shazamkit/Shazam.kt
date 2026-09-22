@@ -5,7 +5,7 @@ import com.music.shazamkit.models.ShazamRequestJson
 import com.music.shazamkit.models.ShazamResponseJson
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -66,7 +66,7 @@ object Shazam {
 
     // HTTP Client Configuration
     private val client by lazy {
-        HttpClient(CIO) {
+        HttpClient(OkHttp) {
             install(ContentNegotiation) {
                 json(
                     Json {
@@ -77,9 +77,12 @@ object Shazam {
                 )
             }
             expectSuccess = false
-            
+
             engine {
-                requestTimeout = 30000
+                config {
+                    connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                }
             }
         }
     }
@@ -110,7 +113,13 @@ object Shazam {
             return Result.success(it)
         }
 
-        return enqueueRequest(signature, sampleDurationMs)
+        return requestMutex.withLock {
+            try {
+                executeRequest(signature, sampleDurationMs)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
     }
 
     /**
@@ -276,6 +285,8 @@ object Shazam {
             parameter("connected", "")
             parameter("shazamapiversion", "v3")
             parameter("sharehub", "true")
+            parameter("hubv5minorversion", "v5.1")
+            parameter("hidelb", "true")
             parameter("video", "v3")
             header("User-Agent", userAgents.random())
             header("Content-Language", "en_US")

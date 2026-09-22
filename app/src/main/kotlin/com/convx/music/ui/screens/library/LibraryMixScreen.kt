@@ -338,10 +338,9 @@ fun LibraryMixScreen(
 
             Spacer(Modifier.weight(1f))
 
-            FlowRow(
-                modifier = Modifier.padding(start = 12.dp, end = 12.dp),
+            Row(
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 LibraryViewType.entries.forEachIndexed { index, type ->
                     ToggleButton(

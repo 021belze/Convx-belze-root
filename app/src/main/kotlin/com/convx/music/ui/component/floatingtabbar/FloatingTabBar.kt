@@ -1273,7 +1273,11 @@ private fun SharedTransitionScope.ExpandedTabs(
     // selected icon shows through the glass in the accent color.
     val tabsBackdrop = rememberLayerBackdrop()
 
-    Box(modifier.width(with(density) { totalWidthPx.toDp() })) {
+    Box(
+        modifier
+            .width(with(density) { totalWidthPx.toDp() })
+            .clip(shapes.tabBarShape)
+    ) {
         Row(
             Modifier
                 .fillMaxSize()

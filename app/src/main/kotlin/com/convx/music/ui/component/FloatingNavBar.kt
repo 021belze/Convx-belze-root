@@ -361,6 +361,7 @@ private fun AppFloatingNavBarChrome(
                 tabExpandedContentPadding = PaddingValues(vertical = 4.dp, horizontal = 6.dp),
                 tabInlineContentPadding = PaddingValues(8.dp),
                 tabWidth = tabWidth,
+                componentSpacing = 10.dp,
             ),
             // The selection puck's lens/accent-tint effects only make sense when the
             // bar itself is sampling the app backdrop through liquid glass.
