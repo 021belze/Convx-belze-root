@@ -19,7 +19,7 @@ val appVersionMinor = versionProps.getProperty("VERSION_MINOR").toInt()
 val appVersionPatch = versionProps.getProperty("VERSION_PATCH").toInt()
 val appVersionRevision = (versionProps.getProperty("VERSION_REVISION") ?: "0").toInt()
 val appVersionCode = appVersionMajor * 100_000 + appVersionMinor * 1_000 + appVersionPatch * 10 + appVersionRevision
-val appVersionName = if (appVersionRevision > 0) "$appVersionMajor.$appVersionMinor.$appVersionPatch-r$appVersionRevision-optimized" else "$appVersionMajor.$appVersionMinor.$appVersionPatch"
+val appVersionName = if (appVersionRevision > 0) "$appVersionMajor.$appVersionMinor.$appVersionPatch-R$appVersionRevision-optimized" else "$appVersionMajor.$appVersionMinor.$appVersionPatch"
 
 plugins {
     id("com.android.application")

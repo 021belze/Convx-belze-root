@@ -639,8 +639,8 @@ fun parseVersion(versionStr: String): ParsedVersion {
     val isBeta = versionStr.startsWith("b", ignoreCase = true)
     val clean = versionStr.trim().removePrefix("v").removePrefix("V").removePrefix("b").removePrefix("B")
 
-    // Split semver from suffixes: e.g. "1.5.2-R8-Optimized" -> ["1.5.2", "R8", "Optimized"]
-    val parts = clean.split(Regex("""[-_]"""))
+    // Split semver from suffixes: e.g. "1.5.2-R8-Optimized" or "1.5.2 R10-optimized" -> ["1.5.2", "R8", "Optimized"]
+    val parts = clean.split(Regex("""[-_\s]+"""))
     val semverParts = parts.firstOrNull()?.split(".")?.mapNotNull { it.toIntOrNull() } ?: emptyList()
     val major = semverParts.getOrElse(0) { 0 }
     val minor = semverParts.getOrElse(1) { 0 }
