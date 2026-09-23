@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -108,11 +109,14 @@ import com.convx.music.utils.rememberPreference
 import com.convx.music.viewmodels.LibraryPlaylistsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.UUID
 import com.convx.music.ui.theme.AppleTokens
 import com.convx.music.ui.utils.heroPullZoom
 import com.convx.music.ui.utils.listOverscroll
 import com.convx.music.ui.utils.rememberHeroZoom
+import com.convx.music.ui.menu.PlaylistMenu
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.convx.music.ui.component.MenuState
+import kotlinx.coroutines.CoroutineScope
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -145,55 +149,38 @@ fun LibraryPlaylistsScreen(
 
     val topSize by viewModel.topValue.collectAsState(initial = 50)
 
-    val likedPlaylist =
+    val likedName = stringResource(R.string.liked)
+    val offlineName = stringResource(R.string.offline)
+    val myTopName = stringResource(R.string.my_top)
+    val cachedName = stringResource(R.string.cached_playlist)
+    val uploadedName = stringResource(R.string.uploaded_playlist)
+
+    fun fixedPlaylist(id: String, name: String) =
         Playlist(
-            playlist = PlaylistEntity(
-                id = UUID.randomUUID().toString(),
-                name = stringResource(R.string.liked)
-            ),
+            playlist = PlaylistEntity(id = id, name = name),
             songCount = 0,
             songThumbnails = emptyList(),
         )
 
-    val downloadPlaylist =
-        Playlist(
-            playlist = PlaylistEntity(
-                id = UUID.randomUUID().toString(),
-                name = stringResource(R.string.offline)
-            ),
-            songCount = 0,
-            songThumbnails = emptyList(),
-        )
+    val likedPlaylist = remember(likedName) {
+        fixedPlaylist(PlaylistEntity.LIKED_PLAYLIST_ID, likedName)
+    }
 
-    val topPlaylist =
-        Playlist(
-            playlist = PlaylistEntity(
-                id = UUID.randomUUID().toString(),
-                name = stringResource(R.string.my_top) + " $topSize"
-            ),
-            songCount = 0,
-            songThumbnails = emptyList(),
-        )
+    val downloadPlaylist = remember(offlineName) {
+        fixedPlaylist(PlaylistEntity.DOWNLOADED_PLAYLIST_ID, offlineName)
+    }
 
-    val cachePlaylist =
-        Playlist(
-            playlist = PlaylistEntity(
-                id = UUID.randomUUID().toString(),
-                name = stringResource(R.string.cached_playlist)
-            ),
-            songCount = 0,
-            songThumbnails = emptyList(),
-        )
-        
-    val uploadedPlaylist =
-        Playlist(
-            playlist = PlaylistEntity(
-                id = UUID.randomUUID().toString(),
-                name = stringResource(R.string.uploaded_playlist)
-            ),
-            songCount = 0,
-            songThumbnails = emptyList(),
-        )
+    val topPlaylist = remember(myTopName, topSize) {
+        fixedPlaylist(PlaylistEntity.TOP_PLAYLIST_ID, "$myTopName $topSize")
+    }
+
+    val cachePlaylist = remember(cachedName) {
+        fixedPlaylist(PlaylistEntity.CACHED_PLAYLIST_ID, cachedName)
+    }
+
+    val uploadedPlaylist = remember(uploadedName) {
+        fixedPlaylist(PlaylistEntity.UPLOADED_PLAYLIST_ID, uploadedName)
+    }
 
     val (showLiked) = rememberPreference(ShowLikedPlaylistKey, true)
     val (showDownloaded) = rememberPreference(ShowDownloadedPlaylistKey, true)
@@ -269,6 +256,7 @@ fun LibraryPlaylistsScreen(
                         PlaylistSortType.LAST_UPDATED -> R.string.sort_by_last_updated
                     }
                 },
+                modifier = Modifier.weight(1f, fill = false),
             )
 
             Spacer(Modifier.weight(1f))
@@ -282,6 +270,8 @@ fun LibraryPlaylistsScreen(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
             )
+
+            Spacer(Modifier.width(8.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
@@ -359,6 +349,8 @@ fun LibraryPlaylistsScreen(
                                 grid = false,
                                 onClick = { navController.navigate("auto_playlist/liked") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -373,6 +365,8 @@ fun LibraryPlaylistsScreen(
                                 grid = false,
                                 onClick = { navController.navigate("auto_playlist/downloaded") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -387,6 +381,8 @@ fun LibraryPlaylistsScreen(
                                 grid = false,
                                 onClick = { navController.navigate("top_playlist/$topSize") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -401,6 +397,8 @@ fun LibraryPlaylistsScreen(
                                 grid = false,
                                 onClick = { navController.navigate("cache_playlist/cached") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -415,6 +413,8 @@ fun LibraryPlaylistsScreen(
                                 grid = false,
                                 onClick = { navController.navigate("auto_playlist/uploaded") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -491,6 +491,8 @@ fun LibraryPlaylistsScreen(
                                 grid = true,
                                 onClick = { navController.navigate("auto_playlist/liked") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -505,6 +507,8 @@ fun LibraryPlaylistsScreen(
                                 grid = true,
                                 onClick = { navController.navigate("auto_playlist/downloaded") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -519,6 +523,8 @@ fun LibraryPlaylistsScreen(
                                 grid = true,
                                 onClick = { navController.navigate("top_playlist/$topSize") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -533,6 +539,8 @@ fun LibraryPlaylistsScreen(
                                 grid = true,
                                 onClick = { navController.navigate("cache_playlist/cached") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -547,6 +555,8 @@ fun LibraryPlaylistsScreen(
                                 grid = true,
                                 onClick = { navController.navigate("auto_playlist/uploaded") },
                                 showIconOnly = libraryIconsOnly,
+                                menuState = menuState,
+                                coroutineScope = coroutineScope,
                             )
                         }
                     }
@@ -605,32 +615,29 @@ private fun AutoPlaylistCard(
     grid: Boolean,
     onClick: () -> Unit,
     showIconOnly: Boolean,
+    menuState: MenuState,
+    coroutineScope: CoroutineScope,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    var customUri by rememberPreference(stringPreferencesKey("thumbnail_${playlist.id}"), "")
-
+    val haptic = LocalHapticFeedback.current
+    val customUri by rememberPreference(stringPreferencesKey("thumbnail_${playlist.id}"), "")
     val override = customUri.takeIf { it.isNotBlank() }
-
-    var menuOpen by remember { mutableStateOf(false) }
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-            customUri = uri.toString()
-        }
-    }
 
     val clickMod = Modifier
         .fillMaxWidth()
         .combinedBounceClick(
             onClick = onClick,
-            onLongClick = { menuOpen = true },
+            onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                menuState.show {
+                    PlaylistMenu(
+                        playlist = playlist,
+                        coroutineScope = coroutineScope,
+                        onDismiss = menuState::dismiss,
+                        autoPlaylist = true,
+                    )
+                }
+            },
         )
 
     Box(modifier) {
@@ -651,26 +658,6 @@ private fun AutoPlaylistCard(
                 thumbnailOverrideUrl = override,
                 modifier = clickMod,
             )
-        }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.change_card_image)) },
-                onClick = {
-                    menuOpen = false
-                    picker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
-            )
-            if (override != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.remove_custom_image)) },
-                    onClick = {
-                        menuOpen = false
-                        customUri = ""
-                    },
-                )
-            }
         }
     }
 }

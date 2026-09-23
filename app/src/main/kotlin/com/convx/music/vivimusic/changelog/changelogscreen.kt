@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import timber.log.Timber
+import com.convx.music.vivimusic.updater.GITHUB_REPO
+import com.convx.music.vivimusic.updater.parseMarkdownChangelog
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -141,61 +143,97 @@ fun ChangelogScreen(
                         showingCached = true
                     }
                 } else {
-                    val changelogUrl = URL("https://github.com/cosmictaserdev-creator/Convx/releases/download/$tag/changelog.json")
-                    val connection = changelogUrl.openConnection() as HttpURLConnection
-                    connection.setRequestProperty("User-Agent", "ViviMusic-Changelog-App")
-                    connection.setRequestProperty("Accept", "application/json")
-                    
-                    if (connection.responseCode == 200) {
-                        val changelogJson = connection.inputStream.bufferedReader().use { it.readText() }
-                        val changelogData = JSONObject(changelogJson)
+                    var loaded = false
+                    try {
+                        val changelogUrl = URL("https://github.com/$GITHUB_REPO/releases/download/$tag/changelog.json")
+                        val connection = changelogUrl.openConnection() as HttpURLConnection
+                        connection.setRequestProperty("User-Agent", "Convx-Changelog-App")
+                        connection.setRequestProperty("Accept", "application/json")
                         
-                        val desc = changelogData.optString("description", null)
-                        val imageUrl = changelogData.optString("image", null)
-                        val warning = changelogData.optString("warning", null)
-                        val changelogArray = changelogData.optJSONArray("changelog")
-                        
-                        val sections = mutableListOf<ChangelogSection>()
-                        if (changelogArray != null) {
-                            for (i in 0 until changelogArray.length()) {
-                                val sectionObj = changelogArray.optJSONObject(i)
-                                if (sectionObj != null) {
-                                    val title = sectionObj.optString("title", "")
-                                    val itemsArray = sectionObj.optJSONArray("items")
-                                    val items = mutableListOf<String>()
-                                    if (itemsArray != null) {
-                                        for (j in 0 until itemsArray.length()) {
-                                            items.add(itemsArray.getString(j))
+                        if (connection.responseCode == 200) {
+                            val changelogJson = connection.inputStream.bufferedReader().use { it.readText() }
+                            val changelogData = JSONObject(changelogJson)
+                            
+                            val desc = changelogData.optString("description", null)
+                            val imageUrl = changelogData.optString("image", null)
+                            val warning = changelogData.optString("warning", null)
+                            val changelogArray = changelogData.optJSONArray("changelog")
+                            
+                            val sections = mutableListOf<ChangelogSection>()
+                            if (changelogArray != null) {
+                                for (i in 0 until changelogArray.length()) {
+                                    val sectionObj = changelogArray.optJSONObject(i)
+                                    if (sectionObj != null) {
+                                        val title = sectionObj.optString("title", "")
+                                        val itemsArray = sectionObj.optJSONArray("items")
+                                        val items = mutableListOf<String>()
+                                        if (itemsArray != null) {
+                                            for (j in 0 until itemsArray.length()) {
+                                                items.add(itemsArray.getString(j))
+                                            }
                                         }
-                                    }
-                                    if (title.isNotBlank() || items.isNotEmpty()) {
-                                        sections.add(ChangelogSection(title, items))
-                                    }
-                                } else {
-                                    // Fallback: This is the old format (Array of Strings)
-                                    val item = changelogArray.optString(i, "")
-                                    if (item.isNotBlank()) {
-                                        if (sections.isEmpty() || sections[0].title.isNotBlank()) {
-                                            sections.add(0, ChangelogSection("", mutableListOf()))
+                                        if (title.isNotBlank() || items.isNotEmpty()) {
+                                            sections.add(ChangelogSection(title, items))
                                         }
-                                        (sections[0].items as MutableList<String>).add(item)
+                                    } else {
+                                        val item = changelogArray.optString(i, "")
+                                        if (item.isNotBlank()) {
+                                            if (sections.isEmpty() || sections[0].title.isNotBlank()) {
+                                                sections.add(0, ChangelogSection("", mutableListOf()))
+                                            }
+                                            (sections[0].items as MutableList<String>).add(item)
+                                        }
                                     }
                                 }
                             }
+                            
+                            saveChangelogToCache(context, tag, sections, imageUrl, desc, warning)
+                            withContext(Dispatchers.Main) {
+                                changelogSections = sections
+                                updateImage = imageUrl.takeIf { !it.isNullOrBlank() }
+                                updateDescription = desc.takeIf { !it.isNullOrBlank() }
+                                updateWarning = warning.takeIf { !it.isNullOrBlank() }
+                                isLoading = false
+                                hasError = false
+                                showingCached = false
+                            }
+                            loaded = true
                         }
-                        
-                        saveChangelogToCache(context, tag, sections, imageUrl, desc, warning)
-                        withContext(Dispatchers.Main) {
-                            changelogSections = sections
-                            updateImage = imageUrl.takeIf { !it.isNullOrBlank() }
-                            updateDescription = desc.takeIf { !it.isNullOrBlank() }
-                            updateWarning = warning.takeIf { !it.isNullOrBlank() }
-                            isLoading = false
-                            hasError = false
-                            showingCached = false
+                    } catch (e: Exception) {
+                        Timber.tag("ChangelogScreen").d("changelog.json not available: ${e.message}")
+                    }
+
+                    if (!loaded) {
+                        // Fallback: Fetch release from GitHub API and parse body
+                        try {
+                            val releaseApiUrl = URL("https://api.github.com/repos/$GITHUB_REPO/releases/tags/$tag")
+                            val releaseConn = releaseApiUrl.openConnection() as HttpURLConnection
+                            releaseConn.setRequestProperty("User-Agent", "Convx-Changelog-App")
+                            releaseConn.setRequestProperty("Accept", "application/vnd.github+json")
+                            if (releaseConn.responseCode == 200) {
+                                val json = releaseConn.inputStream.bufferedReader().use { it.readText() }
+                                val obj = JSONObject(json)
+                                val body = obj.optString("body", "")
+                                val parsed = parseMarkdownChangelog(body, context.getString(R.string.changelog))
+                                val sections = parsed.map { ChangelogSection(it.title, it.items) }
+                                saveChangelogToCache(context, tag, sections, null, null, null)
+                                withContext(Dispatchers.Main) {
+                                    changelogSections = sections
+                                    updateImage = null
+                                    updateDescription = null
+                                    updateWarning = null
+                                    isLoading = false
+                                    hasError = false
+                                    showingCached = false
+                                }
+                                loaded = true
+                            }
+                        } catch (e: Exception) {
+                            Timber.tag("ChangelogScreen").e(e, "Error fetching release body: ${e.message}")
                         }
-                    } else {
-                        Timber.tag("ChangelogScreen").e("HTTP Error ${connection.responseCode} for $tag")
+                    }
+
+                    if (!loaded) {
                         withContext(Dispatchers.Main) { hasError = true; isLoading = false }
                     }
                 }
@@ -214,9 +252,9 @@ fun ChangelogScreen(
         isFetchingOldReleases = true
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                val releasesUrl = URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/releases")
+                val releasesUrl = URL("https://api.github.com/repos/$GITHUB_REPO/releases")
                 val connection = releasesUrl.openConnection() as HttpURLConnection
-                connection.setRequestProperty("User-Agent", "ViviMusic-Changelog-App")
+                connection.setRequestProperty("User-Agent", "Convx-Changelog-App")
                 connection.setRequestProperty("Accept", "application/vnd.github+json")
                 
                 if (connection.responseCode == 200) {
@@ -225,31 +263,17 @@ fun ChangelogScreen(
                     val list = mutableListOf<ReleaseMetadata>()
                     val outputFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
 
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    val tagName = obj.getString("tag_name")
-                    if (!tagName.startsWith("v", ignoreCase = true)) continue
+                    for (i in 0 until array.length()) {
+                        val obj = array.getJSONObject(i)
+                        val tagName = obj.getString("tag_name")
+                        val name = obj.optString("name", tagName)
+                        val publishedAt = obj.optString("published_at", "")
+                        val formattedDate = try {
+                            ZonedDateTime.parse(publishedAt).format(outputFormatter)
+                        } catch (e: Exception) { publishedAt }
 
-                    val name = obj.optString("name", tagName)
-                    val publishedAt = obj.getString("published_at")
-                    val formattedDate = try {
-                        ZonedDateTime.parse(publishedAt).format(outputFormatter)
-                    } catch (e: Exception) { publishedAt }
-
-                    val assets = obj.getJSONArray("assets")
-                    var changelogUrl: String? = null
-                    for (j in 0 until assets.length()) {
-                        val asset = assets.getJSONObject(j)
-                        if (asset.getString("name") == "changelog.json") {
-                            changelogUrl = asset.getString("browser_download_url")
-                            break
-                        }
-                    }
-
-                    if (changelogUrl != null) {
                         list.add(ReleaseMetadata(tagName, name, formattedDate, null))
                     }
-                }
                     withContext(Dispatchers.Main) {
                         val currentVersion = ReleaseMetadata(versionTag, versionTag, context.getString(R.string.current), null)
                         availableReleases = (listOf(currentVersion) + list).distinctBy { it.tagName }

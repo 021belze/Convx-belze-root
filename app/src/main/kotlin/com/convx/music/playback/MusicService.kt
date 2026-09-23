@@ -90,6 +90,7 @@ import com.convx.music.constants.AudioNormalizationKey
 import com.convx.music.constants.AudioOffload
 import com.convx.music.constants.AudioQualityKey
 import com.convx.music.constants.EnableTidalStreamingKey
+import com.convx.music.constants.EnableSaavnStreamingKey
 import com.convx.music.constants.EnabledModulesKey
 import com.convx.music.constants.AutoLoadMoreKey
 import com.convx.music.constants.AutoSkipNextOnErrorKey
@@ -647,6 +648,10 @@ class MusicService :
         connectivityManager = getSystemService()!!
         connectivityObserver = NetworkConnectivityObserver(this)
 
+        database.query {
+            deleteStaleLyrics()
+        }
+
         val screenStateFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -818,11 +823,16 @@ class MusicService :
         ) { mediaMetadata, showLyrics ->
             mediaMetadata to showLyrics
         }.collectLatest(scope) { (mediaMetadata, showLyrics) ->
-            if (showLyrics && mediaMetadata != null && database.lyrics(mediaMetadata.id)
-                    .first() == null
-            ) {
-                val lyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
-                if (lyricsWithProvider.lyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+            if (showLyrics && mediaMetadata != null) {
+                val existing = database.lyrics(mediaMetadata.id).first()
+                val allowedProviders = setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown")
+                if (existing != null && existing.provider !in allowedProviders) {
+                    database.query { delete(existing) }
+                }
+                if (existing == null || existing.provider !in allowedProviders) {
+                    // Short yield so initial audio stream buffer gets network bandwidth priority
+                    kotlinx.coroutines.delay(250L)
+                    val lyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
                     database.query {
                         upsert(
                             LyricsEntity(
@@ -1265,7 +1275,7 @@ class MusicService :
 
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 hasAudioFocus = false
-                wasPlayingBeforeAudioFocusLoss = player.isPlaying
+                wasPlayingBeforeAudioFocusLoss = player.playWhenReady || player.isPlaying
                 if (player.isPlaying) {
                     player.pause()
                 }
@@ -3218,8 +3228,10 @@ class MusicService :
             // Spine streams also use lossless namepacing to avoid cache collisions.
             val losslessOn = dataStore.get(EnableTidalStreamingKey, false)
             val spineEnabled = dataStore.get(EnabledModulesKey, "[]") != "[]"
+            val saavnOn = dataStore.get(EnableSaavnStreamingKey, false)
             val effKey = when {
                 losslessOn || spineEnabled -> "$mediaId#flac"
+                saavnOn -> "$mediaId#saavn"
                 else -> mediaId
             }
             Timber.tag("SpineDebug").d("DataSourceResolver: mediaId=$mediaId spineEnabled=$spineEnabled losslessOn=$losslessOn effKey=$effKey")
@@ -3260,14 +3272,28 @@ class MusicService :
 
             Timber.tag("MusicService").i("FETCHING STREAM: $mediaId | quality=$audioQuality")
             val fetchStart = SystemClock.elapsedRealtime()
+
             val playbackData = try {
                 runBlocking(Dispatchers.IO) {
+                    val currentMeta = currentMediaMetadata.value?.takeIf { it.id == mediaId }
+                    val dbSong = if (currentMeta == null) database.song(mediaId).first() else null
+
+                    val knownTitle = currentMeta?.title ?: dbSong?.song?.title
+                    val knownArtist = currentMeta?.artists?.joinToString(", ") { it.name }
+                        ?: dbSong?.artists?.joinToString(", ") { it.name }
+                    val knownDuration = currentMeta?.duration ?: dbSong?.song?.duration
+                    val knownAlbum = currentMeta?.album?.title ?: dbSong?.album?.title
+
                     YTPlayerUtils.playerResponseForPlayback(
                         mediaId,
                         audioQuality = audioQuality,
                         connectivityManager = connectivityManager,
                         context = this@MusicService,
                         forceStandardAudio = forceStandardAudioMediaIds.contains(mediaId),
+                        knownTitle = knownTitle,
+                        knownArtist = knownArtist,
+                        knownDuration = knownDuration,
+                        knownAlbum = knownAlbum,
                     )
                 }.getOrElse { throwable ->
                     when (throwable) {
@@ -3361,7 +3387,7 @@ class MusicService :
                 // into CHUNK_LENGTH windows risks ExoPlayer reading a short response as
                 // real end-of-file mid-song (auto-advances to the next track with no
                 // error). Fetch the whole remaining file in one open-ended request instead.
-                if (nonNullPlayback.isTidalStream || nonNullPlayback.isSpineStream) {
+                if (nonNullPlayback.isTidalStream || nonNullPlayback.isSpineStream || nonNullPlayback.isSaavnStream) {
                     return@Factory spec.withUri(streamUrl.toUri())
                 }
                 return@Factory spec.withUri(streamUrl.toUri()).subrange(dataSpec.uriPositionOffset, CHUNK_LENGTH)

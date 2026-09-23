@@ -106,9 +106,21 @@ object YTPlayerUtils {
                     .build()
             } ?: response.request
         }
-        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
         .build()
+
+    private val saavnPlaybackCache = java.util.concurrent.ConcurrentHashMap<String, Pair<PlaybackData, Long>>()
+    private data class SaavnTrackMeta(val title: String, val artists: List<String>, val album: String, val duration: Int?, val meta: PlayerResponse?)
+
+    // Circuit breaker for JioSaavn 402/rate-limit errors.
+    // After SAAVN_FAILURE_THRESHOLD consecutive failures, Saavn is bypassed for
+    // SAAVN_COOLDOWN_MS milliseconds so the user gets fast YouTube fallback
+    // instead of repeated 1.2s Saavn timeouts on every track.
+    private val saavnConsecutiveFailures = java.util.concurrent.atomic.AtomicInteger(0)
+    private val saavnCooldownUntil = java.util.concurrent.atomic.AtomicLong(0L)
+    private const val SAAVN_FAILURE_THRESHOLD = 3
+    private const val SAAVN_COOLDOWN_MS = 5 * 60 * 1000L  // 5 minutes
 
     private val poTokenGenerator = PoTokenGenerator()
 
@@ -210,6 +222,10 @@ object YTPlayerUtils {
          *  times (stall/parsing errors) — skips the Spine and Tidal intercepts
          *  entirely and resolves the plain YouTube stream for this call only. */
         forceStandardAudio: Boolean = false,
+        knownTitle: String? = null,
+        knownArtist: String? = null,
+        knownDuration: Int? = null,
+        knownAlbum: String? = null,
     ): Result<PlaybackData> {
         // ── JioSaavn intercept ───────────────────────────────────────────────
         // If the user has enabled JioSaavn streaming, try to resolve the stream
@@ -643,47 +659,61 @@ object YTPlayerUtils {
 
             val saavnEnabled = context.dataStore.get(EnableSaavnStreamingKey, false)
             if (saavnEnabled) {
+                // In-memory cache hit (<10ms)
+                saavnPlaybackCache[videoId]?.takeIf { it.second > System.currentTimeMillis() }?.let { cached ->
+                    Timber.tag(TAG).d("Saavn: in-memory cache hit for videoId=$videoId")
+                    return Result.success(cached.first)
+                }
+
+                // Circuit breaker check: skip Saavn entirely during cooldown period
+                val now = System.currentTimeMillis()
+                if (saavnCooldownUntil.get() > now) {
+                    val remaining = (saavnCooldownUntil.get() - now) / 1000
+                    Timber.tag(TAG).d("Saavn: circuit open — skipping for ${remaining}s (too many 402 errors)")
+                } else {
                 Timber.tag(TAG).d("JioSaavn streaming enabled — trying Saavn for videoId=$videoId")
                 val saavnResult = runCatching {
-                    // Step 1: fetch YouTube Music next items and player metadata concurrently
-                    val (currentSong, meta) = coroutineScope {
-                        val nextDeferred = async {
-                            val nextResult = YouTube.next(WatchEndpoint(videoId = videoId)).getOrNull()
-                            nextResult?.items?.getOrNull(nextResult.currentIndex ?: 0)
-                                ?: nextResult?.items?.firstOrNull()
-                        }
-                        val metaDeferred = async {
-                            playerResponseForMetadata(videoId, playlistId).getOrNull()
-                        }
-                        nextDeferred.await() to metaDeferred.await()
-                    }
-
-                    // Prefer the YouTube Music next() title; fall back to videoDetails title
-                    val title = currentSong?.title
-                        ?: meta?.videoDetails?.title.orEmpty()
-
-                    // Use the proper artist list from SongItem (real artist names).
-                    // Fall back to videoDetails.author with "- Topic" stripped.
-                    val artistNames: List<String> = if (currentSong?.artists?.isNotEmpty() == true) {
-                        currentSong.artists.map { it.name }
+                    val (title, artistNames, albumName, wantedDurationSec, meta) = if (!knownTitle.isNullOrBlank() && !knownArtist.isNullOrBlank()) {
+                        val artists = knownArtist.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        SaavnTrackMeta(knownTitle, artists, knownAlbum.orEmpty(), knownDuration, null)
                     } else {
-                        listOf(
-                            meta?.videoDetails?.author.orEmpty()
-                                .replace(Regex("(?i)\\s*-\\s*topic\\b"), "")
-                                .replace(Regex("(?i)\\s*VEVO\\b"), "")
-                                .trim()
-                        ).filter { it.isNotBlank() }
+                        // Step 1: fetch YouTube Music next items and player metadata concurrently
+                        val (currentSong, meta) = coroutineScope {
+                            val nextDeferred = async {
+                                val nextResult = YouTube.next(WatchEndpoint(videoId = videoId)).getOrNull()
+                                nextResult?.items?.getOrNull(nextResult.currentIndex ?: 0)
+                                    ?: nextResult?.items?.firstOrNull()
+                            }
+                            val metaDeferred = async {
+                                playerResponseForMetadata(videoId, playlistId).getOrNull()
+                            }
+                            nextDeferred.await() to metaDeferred.await()
+                        }
+
+                        val resolvedTitle = currentSong?.title ?: meta?.videoDetails?.title.orEmpty()
+                        val resolvedArtists: List<String> = if (currentSong?.artists?.isNotEmpty() == true) {
+                            currentSong.artists.map { it.name }
+                        } else {
+                            listOf(
+                                meta?.videoDetails?.author.orEmpty()
+                                    .replace(Regex("(?i)\\s*-\\s*topic\\b"), "")
+                                    .replace(Regex("(?i)\\s*VEVO\\b"), "")
+                                    .trim()
+                            ).filter { it.isNotBlank() }
+                        }
+                        val resolvedAlbum = currentSong?.album?.name.orEmpty()
+                        val resolvedDuration = currentSong?.duration
+                        SaavnTrackMeta(resolvedTitle, resolvedArtists, resolvedAlbum, resolvedDuration, meta)
                     }
+
                     val artist = artistNames.joinToString(", ")
 
                     if (title.isBlank()) return@runCatching null
 
                     Timber.tag(TAG).d("Saavn: resolved title=\"$title\" artists=$artistNames for videoId=$videoId")
 
-                    val albumName = currentSong?.album?.name.orEmpty()
                     val wantedTitleLower = title.lowercase(java.util.Locale.US)
                     val wantedArtistsLower = artistNames.map { it.lowercase(java.util.Locale.US) }
-                    val wantedDurationSec = currentSong?.duration
 
                     val primaryQuery = if (albumName.isNotBlank()) {
                         "$albumName $title $artist"
@@ -701,11 +731,11 @@ object YTPlayerUtils {
                     .replace(Regex("\\s+"), " ")
                     .trim()
 
-                    suspend fun findMatch(searchQuery: String): com.music.jiosaavn.SaavnSong? {
-                        if (searchQuery.isBlank()) return null
+                    suspend fun findMatch(searchQuery: String): com.music.jiosaavn.SaavnSong? = kotlinx.coroutines.withTimeoutOrNull(1200L) {
+                        if (searchQuery.isBlank()) return@withTimeoutOrNull null
                         Timber.tag(TAG).d("Saavn: searching with query: \"$searchQuery\"")
-                        val songs = SaavnService.searchSongs(searchQuery).getOrNull() ?: return null
-                        return songs.firstOrNull { candidate ->
+                        val songs = SaavnService.searchSongs(searchQuery).getOrNull() ?: return@withTimeoutOrNull null
+                        songs.firstOrNull { candidate ->
                             val candidateTitleLower = candidate.name.lowercase(java.util.Locale.US)
                             val candidateArtists = candidate.artists.primary.map { it.name.lowercase(java.util.Locale.US) }
                             
@@ -824,7 +854,17 @@ object YTPlayerUtils {
                 }.getOrNull()
 
                 if (saavnResult != null) {
+                    saavnPlaybackCache[videoId] = Pair(saavnResult, System.currentTimeMillis() + 3600_000L)
+                    saavnConsecutiveFailures.set(0)  // reset circuit breaker on success
                     return Result.success(saavnResult)
+                }
+                // Saavn returned null (no match or 402). Bump the failure counter
+                // and open the circuit breaker if threshold is reached.
+                val failures = saavnConsecutiveFailures.incrementAndGet()
+                if (failures >= SAAVN_FAILURE_THRESHOLD) {
+                    saavnCooldownUntil.set(System.currentTimeMillis() + SAAVN_COOLDOWN_MS)
+                    saavnConsecutiveFailures.set(0)
+                    Timber.tag(TAG).w("Saavn: $failures consecutive failures — circuit opened for ${SAAVN_COOLDOWN_MS / 60_000}min")
                 }
                 if (!context.dataStore.get(SaavnFallbackToYouTubeKey, true)) {
                     Timber.tag(TAG).d("Saavn intercept failed and YouTube fallback is off — failing playback")
@@ -832,6 +872,7 @@ object YTPlayerUtils {
                 }
                 // Any exception or null → fall through to YouTube below
                 Timber.tag(TAG).d("Saavn intercept failed or returned null — falling back to YouTube")
+                } // end circuit breaker else
             }
         }
         // ── End JioSaavn intercept ───────────────────────────────────────────
@@ -872,9 +913,6 @@ object YTPlayerUtils {
     ): Result<PlaybackData> = runCatching {
         Timber.tag(logTag).d("Fetching player response for videoId: $videoId, playlistId: $playlistId")
         PlaybackLogManager.log(PlaybackLogLevel.INFO, "Resolving playback data", "Video: $videoId")
-        
-        // Debug: Log ALL playback attempts
-        println("[PLAYBACK_DEBUG] playerResponseForPlayback called: videoId=$videoId, playlistId=$playlistId")
         // Check if this is an uploaded/privately owned track
         val isUploadedTrack = playlistId == "MLPT" || playlistId?.contains("MLPT") == true
 

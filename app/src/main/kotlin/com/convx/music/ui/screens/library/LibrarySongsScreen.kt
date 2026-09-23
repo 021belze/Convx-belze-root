@@ -95,7 +95,7 @@ import com.convx.music.ui.utils.rememberHeroZoom
 @Composable
 fun LibrarySongsScreen(
     navController: NavController,
-    onDeselect: () -> Unit,
+    filterContent: @Composable () -> Unit,
     viewModel: LibrarySongsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -195,27 +195,20 @@ fun LibrarySongsScreen(
                 key = "filter",
                 contentType = CONTENT_TYPE_HEADER,
             ) {
-                Row {
-                    Spacer(Modifier.width(12.dp))
-                    FilterChip(
-                        label = { Text(stringResource(R.string.songs)) },
-                        selected = true,
-                        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
-                        onClick = onDeselect,
-                        shape = RoundedCornerShape(16.dp),
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(R.drawable.close),
-                                contentDescription = ""
-                            )
-                        },
-                    )
-                    // Local-only mode pins the filter to LOCAL in the view model, so
-                    // the chips would be inert controls promising something else.
-                    if (!localOnly) {
+                filterContent()
+            }
+
+            if (!localOnly) {
+                item(
+                    key = "subfilter",
+                    contentType = CONTENT_TYPE_HEADER,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
+                    ) {
                         ChipsRow(
-                            chips =
-                            listOf(
+                            chips = listOf(
                                 SongFilter.LIKED to stringResource(R.string.filter_liked),
                                 SongFilter.LIBRARY to stringResource(R.string.filter_library),
                                 SongFilter.UPLOADED to stringResource(R.string.filter_uploaded),
@@ -226,7 +219,7 @@ fun LibrarySongsScreen(
                             onValueUpdate = {
                                 storedFilter = it
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }

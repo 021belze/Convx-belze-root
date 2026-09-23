@@ -54,12 +54,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -249,7 +251,15 @@ fun Lyrics(
     val scope = rememberCoroutineScope()
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
-    val lyricsEntity by playerConnection.currentLyrics.collectAsState(initial = null)
+    val rawLyricsEntity by playerConnection.currentLyrics.collectAsState(initial = null)
+    val allowedProviders = remember { setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown") }
+    val lyricsEntity = remember(rawLyricsEntity) {
+        if (rawLyricsEntity != null && rawLyricsEntity!!.provider !in allowedProviders) {
+            null
+        } else {
+            rawLyricsEntity
+        }
+    }
     val currentSong by playerConnection.currentSong.collectAsState(initial = null)
     val lyrics = remember(lyricsEntity) { lyricsEntity?.lyrics?.trim() }
 
@@ -452,25 +462,27 @@ fun Lyrics(
         }
     }
 
-    // Active fetch trigger: if lyricsEntity is null, fetch immediately in background
-    LaunchedEffect(mediaMetadata?.id, lyricsEntity, showLyrics) {
+    // Active fetch trigger: if lyricsEntity is null or provider is invalid, fetch immediately in background
+    LaunchedEffect(mediaMetadata?.id, rawLyricsEntity, showLyrics) {
         val meta = mediaMetadata
-        if (showLyrics && meta != null && lyricsEntity == null) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val entryPoint = EntryPointAccessors.fromApplication(
-                        context.applicationContext,
-                        LyricsHelperEntryPoint::class.java
-                    )
-                    val lyricsHelper = entryPoint.lyricsHelper()
-                    val fetched = lyricsHelper.getLyrics(meta)
-                    if (fetched.lyrics != LYRICS_NOT_FOUND) {
+        if (showLyrics && meta != null) {
+            val raw = rawLyricsEntity
+            val isInvalid = raw != null && raw.provider !in allowedProviders
+            if (raw == null || isInvalid) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val entryPoint = EntryPointAccessors.fromApplication(
+                            context.applicationContext,
+                            LyricsHelperEntryPoint::class.java
+                        )
+                        val lyricsHelper = entryPoint.lyricsHelper()
+                        val fetched = lyricsHelper.getLyrics(meta)
                         database.query {
                             upsert(LyricsEntity(meta.id, fetched.lyrics, fetched.provider))
                         }
+                    } catch (e: Exception) {
+                        // Handled/ignored
                     }
-                } catch (e: Exception) {
-                    // Handled/ignored
                 }
             }
         }
@@ -654,7 +666,7 @@ fun Lyrics(
             return@LaunchedEffect
         }
         while (isActive) {
-            delay(100) // Line positions only need ~10Hz; word animation reads this position
+            delay(16) // Smooth 60fps tracking for word-by-word highlight & lyrics sync
             val sliderPosition = sliderPositionProvider()
             isSeeking = sliderPosition != null
             val position = sliderPosition ?: playerConnection.player.currentPosition
@@ -841,14 +853,41 @@ fun Lyrics(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = stringResource(R.string.lyrics_not_found),
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.secondary,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.alpha(0.5f)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.lyrics),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    Text(
+                        text = "Lagu ini tidak memiliki lirik",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Nikmati instrumen musik ini tanpa lirik",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         } else {
             LazyColumn(

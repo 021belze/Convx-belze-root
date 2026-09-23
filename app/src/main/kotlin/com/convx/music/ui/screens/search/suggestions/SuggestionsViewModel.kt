@@ -55,8 +55,9 @@ class SuggestionsViewModel @Inject constructor() : ViewModel() {
             countryCode.lowercase()
         }
 
-        // Allow refresh if force is true OR if we are switching regions
-        if (_isLoading.value && !force && currentLoadedRegion == resolvedCode) return
+        // Do not run concurrently, and do not re-scrape if already loaded for the same region unless forced
+        if (_isLoading.value) return
+        if (!force && currentLoadedRegion == resolvedCode && _suggestionTracks.value != null) return
         
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
@@ -150,7 +151,7 @@ class SuggestionsViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    fun navigateToArtist(artist: SuggestionArtist, navController: NavController) {
+    fun navigateToArtist(artist: SuggestionArtist, navController: NavController, onNavigate: () -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO) {
             YouTube.search(artist.name, YouTube.SearchFilter.FILTER_ARTIST)
                 .onSuccess { searchResult ->
@@ -159,12 +160,13 @@ class SuggestionsViewModel @Inject constructor() : ViewModel() {
                     if (firstArtist != null) {
                         withContext(Dispatchers.Main) {
                             navController.navigate("artist/${firstArtist.id}")
+                            onNavigate()
                         }
                     }
                 }
         }
     }
-    fun navigateToAlbum(album: SuggestionAlbum, navController: NavController) {
+    fun navigateToAlbum(album: SuggestionAlbum, navController: NavController, onNavigate: () -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO) {
             val query = "${album.title} ${album.artist}"
             YouTube.search(query, YouTube.SearchFilter.FILTER_ALBUM)
@@ -174,6 +176,7 @@ class SuggestionsViewModel @Inject constructor() : ViewModel() {
                     if (firstAlbum != null) {
                         withContext(Dispatchers.Main) {
                             navController.navigate("album/${firstAlbum.id}")
+                            onNavigate()
                         }
                     }
                 }

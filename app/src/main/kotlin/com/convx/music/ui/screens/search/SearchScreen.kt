@@ -268,9 +268,9 @@ fun SearchScreen(
                 if (navSearch.query.text.isEmpty() && !navSearch.keyboardActive && !localOnly) {
                     val tabPadding = PaddingValues(bottom = bottomPadding + 50.dp)
                     when (selectedTabIndex) {
-                        0 -> ExploreTabContent(navController = navController, contentPadding = tabPadding)
-                        1 -> SuggestionsTabContent(navController = navController, contentPadding = tabPadding)
-                        2 -> AlbumsTabContent(navController = navController, contentPadding = tabPadding)
+                        0 -> ExploreTabContent(navController = navController, contentPadding = tabPadding, onDismiss = navSearch.onDismissOverlay)
+                        1 -> SuggestionsTabContent(navController = navController, contentPadding = tabPadding, onDismiss = navSearch.onDismissOverlay)
+                        2 -> AlbumsTabContent(navController = navController, contentPadding = tabPadding, onDismiss = navSearch.onDismissOverlay)
                     }
                 } else {
                     when (navSearch.searchSource) {
@@ -333,7 +333,8 @@ fun SearchScreen(
 fun ExploreTabContent(
     navController: NavController,
     viewModel: MoodAndGenresViewModel = hiltViewModel(),
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onDismiss: () -> Unit = {}
 ) {
     val moodAndGenresList by viewModel.moodAndGenres.collectAsState()
 
@@ -365,6 +366,7 @@ fun ExploreTabContent(
                                     navController.navigate(
                                         "youtube_browse/${item.endpoint.browseId}?params=${item.endpoint.params}"
                                     )
+                                    onDismiss()
                                 }
                                 .padding(horizontal = 14.dp)
                         ) {
@@ -404,7 +406,8 @@ fun ExploreTabContent(
 fun AlbumsTabContent(
     navController: NavController,
     viewModel: ExploreViewModel = hiltViewModel(),
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onDismiss: () -> Unit = {}
 ) {
     val menuState = LocalMenuState.current
     val haptic = LocalHapticFeedback.current
@@ -450,6 +453,7 @@ fun AlbumsTabContent(
                         .combinedBounceClick(
                             onClick = {
                                 navController.navigate("album/${album.id}")
+                                onDismiss()
                             },
                             onLongClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)

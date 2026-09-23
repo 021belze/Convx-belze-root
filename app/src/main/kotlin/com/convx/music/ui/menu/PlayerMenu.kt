@@ -11,6 +11,8 @@ import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +37,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.ui.draw.clip
+import coil3.compose.AsyncImage
+import com.convx.music.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -225,135 +233,115 @@ fun PlayerMenu(
         )
     }
 
-    if (isQueueTrigger != true) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(top = 24.dp, bottom = 6.dp),
-        ) {
-            // Show Cast indicator when casting
-            if (isCasting && castDeviceName != null) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.cast),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(R.string.casting_to, castDeviceName ?: ""),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-            
-            // "Hide Volume Bar" only affects the player's own inline volume
-            // row now — this menu copy is the only volume control left once
-            // that row is hidden, so it always shows regardless of the setting.
-            VolumeSlider(
-                value = if (isCasting) castVolume else playerVolume.value,
-                onValueChange = { volume ->
-                    if (isCasting) {
-                        castHandler?.setVolume(volume)
-                    } else {
-                        playerConnection.service.playerVolume.value = volume
+    val startingRadioText = stringResource(R.string.starting_radio)
+    val quickActions = remember(mediaMetadata.id, isListenTogetherGuest) {
+        listOfNotNull(
+            if (!isListenTogetherGuest) {
+                NewAction(
+                    icon = {
+                        Icon(
+                            painter = painterResource(R.drawable.radio),
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    text = context.getString(R.string.start_an_radio),
+                    onClick = {
+                        Toast.makeText(context, startingRadioText, Toast.LENGTH_SHORT).show()
+                        playerConnection.startRadioSeamlessly()
+                        onDismiss()
                     }
+                )
+            } else null,
+            NewAction(
+                icon = {
+                    Icon(
+                        painter = painterResource(R.drawable.playlist_add),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 },
-                modifier = Modifier.fillMaxWidth(),
-                accentColor = rememberGlobalAccentColors().first
+                text = context.getString(R.string.add_to_an_playlist),
+                onClick = { showChoosePlaylistDialog = true }
+            ),
+            NewAction(
+                icon = {
+                    Icon(
+                        painter = painterResource(R.drawable.share),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                text = context.getString(R.string.share),
+                onClick = {
+                    val intent = android.content.Intent().apply {
+                        action = android.content.Intent.ACTION_SEND
+                        type = "text/plain"
+                        putExtra(
+                            android.content.Intent.EXTRA_TEXT,
+                            "https://music.youtube.com/watch?v=${mediaMetadata.id}"
+                        )
+                    }
+                    context.startActivity(android.content.Intent.createChooser(intent, null))
+                    onDismiss()
+                }
             )
+        )
+    }
+
+    val volumeControl: @Composable () -> Unit = {
+        if (isQueueTrigger != true) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 2.dp),
+            ) {
+                // Show Cast indicator when casting
+                if (isCasting && castDeviceName != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.cast),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.casting_to, castDeviceName ?: ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                
+                VolumeSlider(
+                    value = if (isCasting) castVolume else playerVolume.value,
+                    onValueChange = { volume ->
+                        if (isCasting) {
+                            castHandler?.setVolume(volume)
+                        } else {
+                            playerConnection.service.playerVolume.value = volume
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    accentColor = rememberGlobalAccentColors().first
+                )
+            }
         }
     }
 
-    Spacer(modifier = Modifier.height(20.dp))
-
-    HorizontalDivider()
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    val configuration = LocalConfiguration.current
-    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-
-    LazyColumn(
-        contentPadding = PaddingValues(
-            start = 0.dp,
-            top = 0.dp,
-            end = 0.dp,
-            bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
-        ),
-    ) {
-        item {
-            val startingRadioText = stringResource(R.string.starting_radio)
-            NewActionGrid(
-                actions = listOfNotNull(
-                    if (!isListenTogetherGuest) {
-                        NewAction(
-                            icon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.radio),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(32.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            text = stringResource(R.string.start_an_radio),
-                            onClick = {
-                                Toast.makeText(context, startingRadioText, Toast.LENGTH_SHORT).show()
-                                playerConnection.startRadioSeamlessly()
-                                onDismiss()
-                            }
-                        )
-                    } else null,
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = stringResource(R.string.add_to_an_playlist),
-                        onClick = { showChoosePlaylistDialog = true }
-                    ),
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.share),
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = stringResource(R.string.share),
-                        onClick = {
-                            val intent = android.content.Intent().apply {
-                                action = android.content.Intent.ACTION_SEND
-                                type = "text/plain"
-                                putExtra(
-                                    android.content.Intent.EXTRA_TEXT,
-                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}"
-                                )
-                            }
-                            context.startActivity(android.content.Intent.createChooser(intent, null))
-                            onDismiss()
-                        }
-                    )
-                ),
-                columns = if (isListenTogetherGuest) 2 else 3,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp)
-            )
-        }
-
+    val menuItemsContent: LazyListScope.() -> Unit = {
         item {
             Material3MenuGroup(
                 items = buildList {
@@ -721,6 +709,121 @@ fun PlayerMenu(
                     )
                 }
             )
+        }
+    }
+
+    val configuration = LocalConfiguration.current
+    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+
+    if (isPortrait) {
+        if (isQueueTrigger != true) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 10.dp, bottom = 4.dp)
+            ) {
+                volumeControl()
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+
+        LazyColumn(
+            contentPadding = PaddingValues(
+                start = 0.dp,
+                top = 0.dp,
+                end = 0.dp,
+                bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
+            ),
+        ) {
+            item {
+                NewActionGrid(
+                    actions = quickActions,
+                    columns = if (isListenTogetherGuest) 2 else 3,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp)
+                )
+            }
+            menuItemsContent()
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            // Left Column (sticky quick controls & song info in landscape)
+            Column(
+                modifier = Modifier
+                    .width(260.dp)
+                    .padding(vertical = 2.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(ContinuousRoundedRectangle(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        .padding(8.dp)
+                ) {
+                    AsyncImage(
+                        model = mediaMetadata.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(ContinuousRoundedRectangle(10.dp))
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = mediaMetadata.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = mediaMetadata.artists.joinToString { it.name },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                volumeControl()
+
+                NewActionGrid(
+                    actions = quickActions,
+                    columns = if (isListenTogetherGuest) 2 else 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            VerticalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            )
+
+            // Right Column (scrollable menu items in landscape)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(
+                    start = 0.dp,
+                    top = 0.dp,
+                    end = 0.dp,
+                    bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
+                ),
+            ) {
+                menuItemsContent()
+            }
         }
     }
 }

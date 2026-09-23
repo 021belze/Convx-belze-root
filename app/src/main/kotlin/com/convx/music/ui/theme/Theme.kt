@@ -61,6 +61,19 @@ fun accentTextColor(accent: Color, dark: Boolean): Color {
 /** Accent-contrast text color, provided app-wide from the current accent + theme. */
 val LocalAccentTextColor = androidx.compose.runtime.compositionLocalOf { DefaultThemeColor }
 
+/**
+ * The dynamic theme color extracted from the currently-playing song's artwork.
+ *
+ * Intentionally scoped to the player only — providing it at [vivimusicTheme] root would
+ * rebuild [MaterialTheme] on every song change and recompose the entire UI tree (Home,
+ * Library, Settings, etc.) every time the track changes. Instead, [MainActivity] injects
+ * it here via [CompositionLocalProvider] wrapping only [BottomSheetPlayer], so the rest
+ * of the app is completely isolated from per-song palette churn.
+ *
+ * Falls back to [DefaultThemeColor] when no song is playing.
+ */
+val LocalDynamicPlayerThemeColor = androidx.compose.runtime.compositionLocalOf { DefaultThemeColor }
+
 @Composable
 fun vivimusicTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

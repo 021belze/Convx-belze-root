@@ -5,6 +5,9 @@
 
 package com.convx.music.ui.screens.library
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -160,7 +163,7 @@ fun LibraryMixScreen(
     val artists by viewModel.artists.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
 
-    val libraryBackgroundMode by rememberEnumPreference(LibraryBackgroundModeKey, LibraryBackgroundMode.THUMBNAIL_BLUR)
+    val libraryBackgroundMode by rememberEnumPreference(LibraryBackgroundModeKey, LibraryBackgroundMode.PLAIN)
 
     // LibraryBackgroundMode only applies when no custom image is set. Without this
     // the blurred-artwork hero and its scrim kept rendering under the user's own
@@ -186,10 +189,10 @@ fun LibraryMixScreen(
     // Shared resolver, so Library falls back the same way Home and Search do instead of
     // resolving the same preference by hand — its own fallback was colorScheme.primary,
     // a saturated accent, where every other screen falls back to a neutral surface.
-    val tint = if (libraryBackgroundMode == LibraryBackgroundMode.THEME) {
-        rememberAppBackgroundColor(MaterialTheme.colorScheme.primary)
-    } else {
-        rememberHeroTint(heroUrl)
+    val tint = when (libraryBackgroundMode) {
+        LibraryBackgroundMode.THEME -> rememberAppBackgroundColor(MaterialTheme.colorScheme.primary)
+        LibraryBackgroundMode.PLAIN -> MaterialTheme.colorScheme.background
+        LibraryBackgroundMode.THUMBNAIL_BLUR -> rememberHeroTint(heroUrl)
     }
     val onTint = AppleTokens.onColor(tint)
     val heroBackdrop = rememberLayerBackdrop()
@@ -410,9 +413,14 @@ fun LibraryMixScreen(
                 }
             }
         ) {
-            when (viewType) {
-                LibraryViewType.LIST ->
-                    LazyColumn(
+            Crossfade(
+                targetState = viewType,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                label = "library_view_type_crossfade",
+            ) { currentViewType ->
+                when (currentViewType) {
+                    LibraryViewType.LIST ->
+                        LazyColumn(
                         state = lazyListState,
                         modifier = Modifier,
                         contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
@@ -1104,6 +1112,7 @@ fun LibraryMixScreen(
                     }
                 }
             }
+        }
 
             when (viewType) {
                 LibraryViewType.LIST -> HideOnScrollFAB(

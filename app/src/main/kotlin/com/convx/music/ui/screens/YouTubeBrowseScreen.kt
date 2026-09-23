@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,7 +88,7 @@ import com.convx.music.ui.utils.combinedBounceClick
 import com.convx.music.utils.rememberEnumPreference
 import com.convx.music.viewmodels.YouTubeBrowseViewModel
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun YouTubeBrowseScreen(
     navController: NavController,
@@ -239,6 +241,15 @@ fun YouTubeBrowseScreen(
                                 ),
                         )
                     }
+                }
+            }
+
+            if (browseResult == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularWavyProgressIndicator()
                 }
             }
 

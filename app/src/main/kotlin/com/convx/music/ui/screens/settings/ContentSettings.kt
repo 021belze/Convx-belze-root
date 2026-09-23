@@ -272,13 +272,7 @@ fun ContentSettings(
     val (proxyUrl, onProxyUrlChange) = rememberPreference(key = ProxyUrlKey, defaultValue = "")
     val (proxyUsername, onProxyUsernameChange) = rememberPreference(key = ProxyUsernameKey, defaultValue = "")
     val (proxyPassword, onProxyPasswordChange) = rememberPreference(key = ProxyPasswordKey, defaultValue = "")
-    val (enableKugou, onEnableKugouChange) = rememberPreference(key = EnableKugouKey, defaultValue = true)
     val (enableLrclib, onEnableLrclibChange) = rememberPreference(key = EnableLrcLibKey, defaultValue = true)
-    val (enableBetterLyrics, onEnableBetterLyricsChange) = rememberPreference(key = EnableBetterLyricsKey, defaultValue = true)
-    val (enableSimpMusic, onEnableSimpMusicChange) = rememberPreference(key = EnableSimpMusicKey, defaultValue = true)
-    val (enableYouLyPlus, onEnableYouLyPlusChange) = rememberPreference(key = EnableYouLyPlusKey, defaultValue = true)
-    val (enablePaxsenix, onEnablePaxsenixChange) = rememberPreference(key = EnablePaxsenixKey, defaultValue = true)
-    val (enableMusixmatch, onEnableMusixmatchChange) = rememberPreference(key = EnableMusixmatchKey, defaultValue = true)
     val (lyricsProviderOrder, onLyricsProviderOrderChange) = rememberPreference(
         key = LyricsProviderOrderKey,
         defaultValue = "",
@@ -498,16 +492,10 @@ fun ContentSettings(
 
     if (showProviderPriorityDialog) {
         val defaultOrder = LyricsProviderRegistry.getDefaultProviderOrder()
-        // User-toggleable provider names (excludes always-on YouTube providers)
-        val userToggleable = setOf("YouLyPlus", "Paxsenix", "Musixmatch", "BetterLyrics", "SimpMusic", "LrcLib", "Kugou")
         val enabledProviders = setOfNotNull(
             "LrcLib".takeIf { enableLrclib },
-            "Kugou".takeIf { enableKugou },
-            "BetterLyrics".takeIf { enableBetterLyrics },
-            "SimpMusic".takeIf { enableSimpMusic },
-            "YouLyPlus".takeIf { enableYouLyPlus },
-            "Paxsenix".takeIf { enablePaxsenix },
-            "Musixmatch".takeIf { enableMusixmatch },
+            "YouTubeMusic",
+            "YouTubeSubtitle",
         )
 
         // Build a normalized order: saved order first (only known providers), then any missing ones
@@ -1161,131 +1149,7 @@ fun ContentSettings(
                     },
                     onClick = { onEnableLrclibChange(!enableLrclib) }
                 ),
-                Material3SettingsItem(
-                    icon = painterResource(R.drawable.lyrics),
-                    title = { Text(stringResource(R.string.enable_kugou)) },
-                    trailingContent = {
-                        Switch(
-                            checked = enableKugou,
-                            onCheckedChange = onEnableKugouChange,
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (enableKugou) R.drawable.check else R.drawable.close
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                )
-                            }
-                        )
-                    },
-                    onClick = { onEnableKugouChange(!enableKugou) }
-                ),
-                Material3SettingsItem(
-                    icon = painterResource(R.drawable.lyrics),
-                    title = { Text(stringResource(R.string.enable_better_lyrics)) },
-                    description = { Text(stringResource(R.string.enable_better_lyrics_desc)) },
-                    trailingContent = {
-                        Switch(
-                            checked = enableBetterLyrics,
-                            onCheckedChange = onEnableBetterLyricsChange,
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (enableBetterLyrics) R.drawable.check else R.drawable.close
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                )
-                            }
-                        )
-                    },
-                    onClick = { onEnableBetterLyricsChange(!enableBetterLyrics) }
-                ),
-                Material3SettingsItem(
-                    icon = painterResource(R.drawable.lyrics),
-                    title = { Text(stringResource(R.string.enable_simpmusic)) },
-                    description = { Text(stringResource(R.string.enable_simpmusic_desc)) },
-                    trailingContent = {
-                        Switch(
-                            checked = enableSimpMusic,
-                            onCheckedChange = onEnableSimpMusicChange,
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (enableSimpMusic) R.drawable.check else R.drawable.close
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                )
-                            }
-                        )
-                    },
-                    onClick = { onEnableSimpMusicChange(!enableSimpMusic) }
-                ),
-                Material3SettingsItem(
-                    icon = painterResource(R.drawable.lyrics),
-                    title = { Text("YouLyPlus") },
-                    description = { Text("LyricsPlus multi-server provider (YouLy+ extension backend)") },
-                    trailingContent = {
-                        Switch(
-                            checked = enableYouLyPlus,
-                            onCheckedChange = onEnableYouLyPlusChange,
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (enableYouLyPlus) R.drawable.check else R.drawable.close
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                )
-                            }
-                        )
-                    },
-                    onClick = { onEnableYouLyPlusChange(!enableYouLyPlus) }
-                ),
-                Material3SettingsItem(
-                    icon = painterResource(R.drawable.lyrics),
-                    title = { Text("PaxSenix") },
-                    description = { Text("Apple Music quality synced lyrics with syllable-level timing") },
-                    trailingContent = {
-                        Switch(
-                            checked = enablePaxsenix,
-                            onCheckedChange = onEnablePaxsenixChange,
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (enablePaxsenix) R.drawable.check else R.drawable.close
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                )
-                            }
-                        )
-                    },
-                    onClick = { onEnablePaxsenixChange(!enablePaxsenix) }
-                ),
-                Material3SettingsItem(
-                    icon = painterResource(R.drawable.lyrics),
-                    title = { Text("Musixmatch") },
-                    description = { Text("Widely used synced lyrics catalog") },
-                    trailingContent = {
-                        Switch(
-                            checked = enableMusixmatch,
-                            onCheckedChange = onEnableMusixmatchChange,
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (enableMusixmatch) R.drawable.check else R.drawable.close
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                )
-                            }
-                        )
-                    },
-                    onClick = { onEnableMusixmatchChange(!enableMusixmatch) }
-                ),
+
                 Material3SettingsItem(
                     icon = painterResource(R.drawable.lyrics),
                     title = { Text(stringResource(R.string.lyrics_provider_priority)) },

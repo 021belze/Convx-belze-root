@@ -8,6 +8,8 @@ package com.convx.music.ui.screens
 import android.app.Activity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -32,6 +34,7 @@ import androidx.navigation.compose.dialog
 import androidx.navigation.navArgument
 import com.convx.music.ui.utils.LocalNavAnimatedVisibilityScope
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.convx.music.ui.utils.morphContainer
 import com.convx.music.ui.utils.hasMorphSource
@@ -107,23 +110,24 @@ fun NavGraphBuilder.navigationBuilder(
     // NavHost destinations again -- one AnimatedContent transition per switch (the
     // iOS parallax push set at the NavHost level in MainActivity), multi-back-stack
     // via popUpTo/saveState/restoreState in onNavItemClick, same as everything else
-    // in this file.
-    sharedComposable(Screens.Home.route) {
+    // Main navbar tabs use mainTabComposable: clean, fast 150ms alpha transition
+    // without nested scaleIn/scaleOut spring animations that cause stutter on heavy pages.
+    mainTabComposable(Screens.Home.route) {
         HomeScreen(navController = navController, snackbarHostState = snackbarHostState)
     }
 
     // Only ever reachable as a tab while local-only mode is on (see Screens.mainScreens),
     // but the route is always registered: a saved back stack entry from a session that
     // had the mode on must still resolve after it is turned off.
-    sharedComposable(Screens.Songs.route) {
+    mainTabComposable(Screens.Songs.route) {
         LocalSongsScreen(navController)
     }
 
-    sharedComposable(Screens.Library.route) {
+    mainTabComposable(Screens.Library.route) {
         LibraryScreen(navController)
     }
 
-    sharedComposable(Screens.Settings.route) {
+    mainTabComposable(Screens.Settings.route) {
         SettingsScreen(navController, scrollBehavior)
     }
 
@@ -579,10 +583,10 @@ private fun NavGraphBuilder.sharedComposable(
 ) = composable(
     route = route,
     arguments = arguments,
-    enterTransition = { fadeIn(tween(1)) },
-    exitTransition = { fadeOut(tween(180), targetAlpha = 0.7f) },
-    popEnterTransition = { fadeIn(tween(180), initialAlpha = 0.7f) },
-    popExitTransition = { fadeOut(tween(1)) },
+    enterTransition = { fadeIn(tween(200, easing = FastOutSlowInEasing)) },
+    exitTransition = { fadeOut(tween(180, easing = FastOutSlowInEasing), targetAlpha = 0.7f) },
+    popEnterTransition = { fadeIn(tween(180, easing = FastOutSlowInEasing), initialAlpha = 0.7f) },
+    popExitTransition = { fadeOut(tween(180, easing = FastOutSlowInEasing)) },
 ) { entry ->
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
         val morphId = entry.morphArtworkId()
@@ -618,6 +622,28 @@ private fun NavGraphBuilder.sharedComposable(
                     }
                 )
         ) {
+            content(entry)
+        }
+    }
+}
+
+/**
+ * Root tabs of the main navbar (Home, Songs, Library, Settings).
+ * Uses a crisp, lightweight alpha crossfade without nested scale/spring animations
+ * to ensure stutter-free switching between primary navigation destinations.
+ */
+private fun NavGraphBuilder.mainTabComposable(
+    route: String,
+    content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
+) = composable(
+    route = route,
+    enterTransition = { fadeIn(tween(160, easing = LinearEasing)) },
+    exitTransition = { fadeOut(tween(140, easing = LinearEasing)) },
+    popEnterTransition = { fadeIn(tween(160, easing = LinearEasing)) },
+    popExitTransition = { fadeOut(tween(140, easing = LinearEasing)) },
+) { entry ->
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+        Box(modifier = Modifier.fillMaxSize()) {
             content(entry)
         }
     }

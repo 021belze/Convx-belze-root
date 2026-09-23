@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -702,20 +702,28 @@ class HomeViewModel @Inject constructor(
         if (selectedChip.value == null) {
             previousHomePage.value = homePage.value
         }
+        selectedChip.value = chip
 
         viewModelScope.launch(Dispatchers.IO) {
-            val hideExplicit = context.dataStore.get(HideExplicitKey, false)
-            val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false) || context.dataStore.get(DataSaverEnabledKey, false)
-            val hideYoutubeShorts = context.dataStore.get(HideYoutubeShortsKey, false)
-            val nextSections = YouTube.home(params = chip.endpoint?.params).getOrNull() ?: return@launch
+            try {
+                val hideExplicit = context.dataStore.get(HideExplicitKey, false)
+                val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false) || context.dataStore.get(DataSaverEnabledKey, false)
+                val hideYoutubeShorts = context.dataStore.get(HideYoutubeShortsKey, false)
+                val browseId = chip.endpoint?.browseId ?: "FEmusic_home"
+                val nextSections = YouTube.home(browseId = browseId, params = chip.endpoint?.params).getOrThrow()
 
-            homePage.value = nextSections.copy(
-                chips = homePage.value?.chips,
-                sections = nextSections.sections.map { section ->
-                    section.copy(items = section.items.filterExplicit(hideExplicit).filterVideoSongs(hideVideoSongs).filterYoutubeShorts(hideYoutubeShorts))
-                }
-            )
-            selectedChip.value = chip
+                homePage.value = nextSections.copy(
+                    chips = homePage.value?.chips ?: nextSections.chips,
+                    sections = nextSections.sections.map { section ->
+                        section.copy(items = section.items.filterExplicit(hideExplicit).filterVideoSongs(hideVideoSongs).filterYoutubeShorts(hideYoutubeShorts))
+                    }
+                )
+            } catch (e: Exception) {
+                timber.log.Timber.tag("HomeViewModel").e(e, "Failed to load mood feed for chip: ${chip.title}")
+                homePage.value = previousHomePage.value
+                previousHomePage.value = null
+                selectedChip.value = null
+            }
         }
     }
 

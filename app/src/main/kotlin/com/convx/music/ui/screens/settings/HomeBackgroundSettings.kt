@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -391,7 +391,7 @@ fun HomeBackgroundControls() {
         // pulled from the library's own content.
         val (libraryBackgroundMode, onLibraryBackgroundModeChange) = rememberEnumPreference(
             LibraryBackgroundModeKey,
-            LibraryBackgroundMode.THUMBNAIL_BLUR,
+            LibraryBackgroundMode.PLAIN,
         )
         Material3SettingsGroup(
             title = stringResource(R.string.library_background),

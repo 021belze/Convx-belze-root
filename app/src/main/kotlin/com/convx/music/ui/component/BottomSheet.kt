@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import com.convx.music.constants.BottomSheetAnimationSpec
 import com.convx.music.constants.NavigationBarAnimationSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -146,7 +147,7 @@ fun BottomSheet(
                 if (morphEnabled) {
                     Modifier.recordPlayerLayer(
                         layer = { PlayerMorph.fullLayer },
-                        drawInPlace = { !PlayerMorph.active },
+                        drawInPlace = { !PlayerMorph.active && !state.isCollapsed },
                     )
                 } else {
                     Modifier
@@ -241,7 +242,7 @@ fun BottomSheet(
         }
 
         // main content
-        if (!state.isCollapsed) {
+        if (!state.isCollapsed || morphEnabled) {
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
@@ -254,6 +255,8 @@ fun BottomSheet(
                         // fade while the morph is running.
                         alpha = if (morphEnabled && PlayerMorph.active) {
                             1f
+                        } else if (state.isCollapsed) {
+                            0f
                         } else {
                             ((state.progress - PLAYER_LAYER_HANDOFF_PROGRESS) / 0.2f)
                                 .coerceIn(0f, 1f)
@@ -374,31 +377,36 @@ class BottomSheetState(
     }
 
     private fun expand() {
-        // Apple Music feel: bouncy spring for expand with tactile overshoot
+        // No overshoot on expand: the sheet travels the full screen height, so
+        // even a small spring overshoot reads as a jarring bounce at the top.
+        // DampingRatioNoBouncy (1.0) settles cleanly. stiffness 420 keeps the
+        // motion fast and snappy without any rebound.
         expand(
             spring(
-                dampingRatio = 0.68f,
-                stiffness = 380f,
+                dampingRatio = 1.0f,
+                stiffness = 420f,
             )
         )
     }
 
     fun collapseSoft() {
-        // Bouncy settling curve: energetic response, fast and fluid on 120Hz panels
+        // Settling curve: energetic response, fast and fluid on 120Hz panels
         collapse(
             spring(
-                dampingRatio = 0.70f,
+                dampingRatio = 0.75f,
                 stiffness = 360f,
             ),
         )
     }
 
     fun expandSoft() {
-        // Bouncy settling curve: energetic response, fast and fluid on 120Hz panels
+        // Same no-bounce policy as expand(): full-height travel means any
+        // overshoot is immediately visible. Critical damping (0.96) + moderate
+        // stiffness gives a smooth, settled landing identical to iOS sheet open.
         expand(
             spring(
-                dampingRatio = 0.70f,
-                stiffness = 360f,
+                dampingRatio = 0.96f,
+                stiffness = 400f,
             ),
         )
     }
@@ -526,21 +534,22 @@ fun rememberBottomSheetState(
     var previousAnchor by rememberSaveable {
         mutableIntStateOf(initialAnchor)
     }
+    val initialValue = when (previousAnchor) {
+        expandedAnchor -> expandedBound
+        collapsedAnchor -> collapsedBound
+        dismissedAnchor -> dismissedBound
+        else -> error("Unknown BottomSheet anchor")
+    }
     val animatable = remember {
-        Animatable(0.dp, Dp.VectorConverter)
+        Animatable(initialValue, Dp.VectorConverter)
     }
 
     return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope) {
-        val initialValue = when (previousAnchor) {
-            expandedAnchor -> expandedBound
-            collapsedAnchor -> collapsedBound
-            dismissedAnchor -> dismissedBound
-            else -> error("Unknown BottomSheet anchor")
-        }
-
         animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), null)
         coroutineScope.launch {
-            animatable.animateTo(initialValue, NavigationBarAnimationSpec)
+            if (animatable.value != initialValue) {
+                animatable.animateTo(initialValue, BottomSheetAnimationSpec)
+            }
         }
 
         BottomSheetState(

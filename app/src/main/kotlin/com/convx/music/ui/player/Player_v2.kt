@@ -261,13 +261,21 @@ fun PlayerV2(
         }
     }
     
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            val rawDuration = playerConnection.player.duration
-            position = playerConnection.player.currentPosition.coerceAtLeast(0L)
-            duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
-            delay(50)
+    LaunchedEffect(isPlaying, state.isCollapsed) {
+        if (!state.isCollapsed) {
+            while (isActive) {
+                val rawDuration = playerConnection.player.duration
+                position = playerConnection.player.currentPosition.coerceAtLeast(0L)
+                duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
+                delay(if (isPlaying) 50 else 500)
+            }
         }
+    }
+
+    LaunchedEffect(mediaMetadata?.id, state.isCollapsed) {
+        val rawDuration = playerConnection.player.duration
+        position = playerConnection.player.currentPosition.coerceAtLeast(0L)
+        duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
     }
 
     val adaptivePrimary by animateColorAsState(

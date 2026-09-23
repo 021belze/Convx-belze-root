@@ -35,6 +35,7 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -306,6 +307,7 @@ fun FloatingTabBar(
                     animatedVisibilityScope = this@AnimatedContent,
                     backdrop = backdrop,
                     accentColor = accentColor,
+                    targetWidthPx = expandedContentWidthPx,
                     onWidthMeasured = onExpandedWidthChanged
                 )
                 FloatingTabBarVisual.SEARCH_EXPANDED -> SearchExpandedBar(
@@ -660,7 +662,7 @@ private fun SharedTransitionScope.InlineTab(
                     Modifier.sharedElement(
                         sharedContentState = rememberSharedContentState("tab#${inlineTab.key}-icon"),
                         animatedVisibilityScope = animatedVisibilityScope,
-                        zIndexInOverlay = 1f
+                        zIndexInOverlay = 2f
                     )
                 ) {
                     inlineTab.icon()
@@ -736,9 +738,11 @@ private fun SharedTransitionScope.InlineAccessory(
             modifier = modifier
                 .then(
                     if (isAccessoryShared) {
-                        Modifier.sharedElement(
+                        Modifier.sharedBounds(
                             sharedContentState = rememberSharedContentState("accessory"),
-                            animatedVisibilityScope = animatedVisibilityScope
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            clipInOverlayDuringTransition = OverlayClip(shapes.accessoryShape),
+                            zIndexInOverlay = 1f
                         )
                     } else {
                         Modifier.animateEnterExitAccessory(
@@ -781,18 +785,26 @@ private fun SharedTransitionScope.ExpandedBar(
     // Vendored addition: reports this row's own measured width upward so
     // SearchExpandedBar can hold the bar at the exact same overall width
     // instead of expanding to fill all available space in search mode.
+    targetWidthPx: Int? = null,
     onWidthMeasured: ((Int) -> Unit)? = null,
 ) {
     val hasTabGroup = scope.tabs.isNotEmpty()
     val standaloneTab = scope.standaloneTab
 
-    // The accessory matches the tab row's own (content-sized, not full-bleed)
-    // width, so both pills line up edge to edge. The tab row is measured first
-    // (onSizeChanged below); the accessory falls back to fillMaxWidth until
-    // that first measurement lands — a one-frame lag, same pattern as
-    // FloatingMiniPlayer's measuredHeightPx.
     val density = LocalDensity.current
-    var tabRowWidthPx by remember { mutableIntStateOf(0) }
+    val layoutDirection = LocalLayoutDirection.current
+    val tabsCount = scope.tabs.size
+    val estimatedWidthPx = remember(density, sizes.tabWidth, sizes.tabBarContentPadding, tabsCount, standaloneTab != null, sizes.componentSpacing) {
+        val tabWidthPx = with(density) { sizes.tabWidth.toPx() }
+        val paddingStartPx = with(density) { sizes.tabBarContentPadding.calculateStartPadding(layoutDirection).toPx() }
+        val paddingEndPx = with(density) { sizes.tabBarContentPadding.calculateEndPadding(layoutDirection).toPx() }
+        val tabsGroupWidthPx = tabWidthPx * tabsCount + paddingStartPx + paddingEndPx
+        val standaloneWidthPx = if (standaloneTab != null) with(density) { (sizes.tabWidth.coerceAtMost(48.dp) + sizes.componentSpacing).toPx() } else 0f
+        (tabsGroupWidthPx + standaloneWidthPx).fastRoundToInt()
+    }
+    var tabRowWidthPx by remember(targetWidthPx) {
+        mutableIntStateOf(targetWidthPx?.takeIf { it > 0 } ?: estimatedWidthPx)
+    }
 
     // The standalone tab (search) is always its own floating circle — same as
     // the inline (collapsed) state — never merged into the tab group pill, so
@@ -815,7 +827,7 @@ private fun SharedTransitionScope.ExpandedBar(
                 modifier = if (tabRowWidthPx > 0) {
                     Modifier.width(with(density) { tabRowWidthPx.toDp() })
                 } else {
-                    Modifier.fillMaxWidth()
+                    Modifier.width(with(density) { estimatedWidthPx.toDp() })
                 }
             )
         }
@@ -1056,9 +1068,11 @@ private fun SharedTransitionScope.ExpandedAccessory(
         modifier = modifier
             .then(
                 if (isAccessoryShared) {
-                    Modifier.sharedElement(
+                    Modifier.sharedBounds(
                         sharedContentState = rememberSharedContentState("accessory"),
-                        animatedVisibilityScope = animatedVisibilityScope
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        clipInOverlayDuringTransition = OverlayClip(shapes.accessoryShape),
+                        zIndexInOverlay = 1f
                     )
                 } else {
                     Modifier.animateEnterExitAccessory(
@@ -1335,7 +1349,7 @@ private fun SharedTransitionScope.ExpandedTabs(
                                         Modifier.sharedElement(
                                             sharedContentState = rememberSharedContentState("tab#${tab.key}-icon"),
                                             animatedVisibilityScope = animatedVisibilityScope,
-                                            zIndexInOverlay = 1f
+                                            zIndexInOverlay = 2f
                                         )
                                     } else {
                                         Modifier.animateEnterExitTab(
@@ -1727,20 +1741,15 @@ private fun Modifier.animateEnterExitTab(
     animatedVisibilityScope: AnimatedVisibilityScope
 ): Modifier = with(sharedTransitionScope) {
     with(animatedVisibilityScope) {
-        val enterStartFraction = 0.5f
-        val enterEndFraction = 0.8f
-        val durationMs = 150
-
         val animatedAlpha by transition.animateFloat(
             transitionSpec = {
-                keyframes {
-                    durationMillis = durationMs
-                    if (targetState == EnterExitState.Visible) {
-                        0f atFraction enterStartFraction using FastOutSlowInEasing
-                        1f atFraction enterEndFraction
-                    }
+                if (targetState == EnterExitState.Visible) {
+                    tween(durationMillis = 180, delayMillis = 40, easing = FastOutSlowInEasing)
+                } else {
+                    tween(durationMillis = 140, easing = FastOutSlowInEasing)
                 }
-            }
+            },
+            label = "tabEnterExitAlpha"
         ) { targetState ->
             when (targetState) {
                 EnterExitState.Visible -> 1f
@@ -1748,30 +1757,26 @@ private fun Modifier.animateEnterExitTab(
             }
         }
 
-        val blurRadius = with(LocalDensity.current) { 50.dp.toPx() }
-        val animatedBlur by transition.animateFloat(
+        val animatedScale by transition.animateFloat(
             transitionSpec = {
-                keyframes {
-                    durationMillis = durationMs
-                    if (targetState == EnterExitState.Visible) {
-                        blurRadius atFraction enterStartFraction using FastOutSlowInEasing
-                        0f atFraction enterEndFraction
-                    }
+                if (targetState == EnterExitState.Visible) {
+                    spring(dampingRatio = 0.8f, stiffness = 400f)
+                } else {
+                    tween(durationMillis = 140, easing = FastOutSlowInEasing)
                 }
-            }
+            },
+            label = "tabEnterExitScale"
         ) { targetState ->
             when (targetState) {
-                EnterExitState.Visible -> 0f
-                else -> blurRadius
+                EnterExitState.Visible -> 1f
+                else -> 0.88f
             }
         }
 
         graphicsLayer {
             alpha = animatedAlpha
-            renderEffect = BlurEffect(
-                radiusX = animatedBlur,
-                radiusY = animatedBlur
-            )
+            scaleX = animatedScale
+            scaleY = animatedScale
         }
     }
 }

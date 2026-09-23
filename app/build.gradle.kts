@@ -17,9 +17,9 @@ val versionProps = Properties().apply {
 val appVersionMajor = versionProps.getProperty("VERSION_MAJOR").toInt()
 val appVersionMinor = versionProps.getProperty("VERSION_MINOR").toInt()
 val appVersionPatch = versionProps.getProperty("VERSION_PATCH").toInt()
-// 1.5.1 -> 10501. Room for MINOR/PATCH up to 99 each before a scheme change is needed.
-val appVersionCode = appVersionMajor * 10_000 + appVersionMinor * 100 + appVersionPatch
-val appVersionName = "$appVersionMajor.$appVersionMinor.$appVersionPatch"
+val appVersionRevision = (versionProps.getProperty("VERSION_REVISION") ?: "0").toInt()
+val appVersionCode = appVersionMajor * 100_000 + appVersionMinor * 1_000 + appVersionPatch * 10 + appVersionRevision
+val appVersionName = if (appVersionRevision > 0) "$appVersionMajor.$appVersionMinor.$appVersionPatch-r$appVersionRevision-optimized" else "$appVersionMajor.$appVersionMinor.$appVersionPatch"
 
 plugins {
     id("com.android.application")

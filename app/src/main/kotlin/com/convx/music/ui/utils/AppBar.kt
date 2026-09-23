@@ -107,7 +107,7 @@ class AppBarScrollBehavior(
                 source: NestedScrollSource,
             ): Offset {
                 if (!canScroll()) return Offset.Zero
-                state.contentOffset += consumed.y
+                state.contentOffset = (state.contentOffset + consumed.y).coerceAtMost(0f)
                 if (state.heightOffset == 0f || state.heightOffset == state.heightOffsetLimit) {
                     if (consumed.y == 0f && available.y > 0f) {
                         // Reset the total content offset to zero when scrolling all the way down.

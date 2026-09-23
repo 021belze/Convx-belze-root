@@ -62,7 +62,10 @@ object PlayerMorph {
         get() {
             val fraction = progress
             if (fraction <= 0f || fraction >= 1f) return false
-            if (miniLayer == null || fullLayer == null) return false
+            val miniL = miniLayer ?: return false
+            val fullL = fullLayer ?: return false
+            if (miniL.size.width <= 0 || miniL.size.height <= 0) return false
+            if (fullL.size.width <= 0 || fullL.size.height <= 0) return false
             val mini = miniPlayerContainerRect ?: return false
             return mini.width > 0f && mini.height > 0f
         }

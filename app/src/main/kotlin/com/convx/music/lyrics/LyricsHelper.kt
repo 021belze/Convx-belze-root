@@ -65,7 +65,8 @@ constructor(
     private var currentLyricsJob: Job? = null
 
     suspend fun getLyrics(mediaMetadata: MediaMetadata): LyricsWithProvider {
-        val cached = cache.get(mediaMetadata.id)?.firstOrNull()
+        val artistTitleKey = "${mediaMetadata.artists.joinToString { it.name }}-${mediaMetadata.title}".replace(" ", "")
+        val cached = cache.get(mediaMetadata.id)?.firstOrNull() ?: cache.get(artistTitleKey)?.firstOrNull()
         if (cached != null) {
             return LyricsWithProvider(cached.lyrics, cached.providerName)
         }
@@ -77,16 +78,13 @@ constructor(
         }
 
         // Check network connectivity before making network requests
-        // Use synchronous check as fallback if flow doesn't emit
         val isNetworkAvailable = try {
             networkConnectivity.isCurrentlyConnected()
         } catch (e: Exception) {
-            // If network check fails, try to proceed anyway
             true
         }
         
         if (!isNetworkAvailable) {
-            // Still proceed but return not found to avoid hanging
             return LyricsWithProvider(LYRICS_NOT_FOUND, "Unknown")
         }
 
@@ -97,8 +95,9 @@ constructor(
                 for (provider in providers) {
                     if (!provider.isEnabled(context)) continue
                     try {
-                        // Per-provider timeout: max 1.8s per provider so slow/dead servers don't freeze the waterfall
-                        val result = withTimeoutOrNull(1800L) {
+                        // Max 3s per provider: enough for YouTube Music's two sequential
+                        // API calls (next + lyrics browse) while still failing fast on dead providers.
+                        val result = withTimeoutOrNull(3000L) {
                             provider.getLyrics(
                                 mediaMetadata.id,
                                 mediaMetadata.title,
@@ -111,14 +110,15 @@ constructor(
                         result.onSuccess { lyrics ->
                             if (lyrics.isNotBlank() && lyrics != LYRICS_NOT_FOUND) {
                                 val found = LyricsWithProvider(lyrics, provider.name)
-                                cache.put(mediaMetadata.id, listOf(LyricsResult(provider.name, lyrics)))
+                                val resultList = listOf(LyricsResult(provider.name, lyrics))
+                                cache.put(mediaMetadata.id, resultList)
+                                cache.put(artistTitleKey, resultList)
                                 return@async found
                             }
                         }.onFailure {
                             reportException(it)
                         }
                     } catch (e: Exception) {
-                        // Catch network-related exceptions like UnresolvedAddressException
                         reportException(e)
                     }
                 }
@@ -148,30 +148,26 @@ constructor(
         currentLyricsJob?.cancel()
 
         val cacheKey = "$songArtists-$songTitle".replace(" ", "")
-        cache.get(cacheKey)?.let { results ->
-            results.forEach {
-                callback(it)
-            }
+        val cached = cache.get(mediaId) ?: cache.get(cacheKey)
+        if (cached != null) {
+            cached.forEach { callback(it) }
             return
         }
 
         // Check network connectivity before making network requests
-        // Use synchronous check as fallback if flow doesn't emit
         val isNetworkAvailable = try {
             networkConnectivity.isCurrentlyConnected()
         } catch (e: Exception) {
-            // If network check fails, try to proceed anyway
             true
         }
         
         if (!isNetworkAvailable) {
-            // Still try to proceed in case of false negative
             return
         }
 
         val allResult = mutableListOf<LyricsResult>()
         val providers = resolveLyricsProviders()
-        currentLyricsJob = CoroutineScope(SupervisorJob()).launch {
+        currentLyricsJob = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             providers.forEach { provider ->
                 if (provider.isEnabled(context)) {
                     try {
@@ -181,12 +177,12 @@ constructor(
                             callback(result)
                         }
                     } catch (e: Exception) {
-                        // Catch network-related exceptions like UnresolvedAddressException
                         reportException(e)
                     }
                 }
             }
             cache.put(cacheKey, allResult)
+            cache.put(mediaId, allResult)
         }
 
         currentLyricsJob?.join()
@@ -198,7 +194,7 @@ constructor(
     }
 
     companion object {
-        private const val MAX_CACHE_SIZE = 3
+        private const val MAX_CACHE_SIZE = 10
     }
 }
 

@@ -14,39 +14,30 @@ import com.convx.music.constants.PreferredLyricsProvider
  */
 object LyricsProviderRegistry {
     private val providerMap = mapOf(
-        "YouLyPlus"       to YouLyPlusLyricsProvider,
-        "Paxsenix"        to PaxSenixLyricsProvider,
-        "Musixmatch"      to MusixmatchLyricsProvider,
-        "BetterLyrics"    to BetterLyricsProvider,
-        "SimpMusic"       to SimpMusicLyricsProvider,
-        "LrcLib"          to LrcLibLyricsProvider,
-        "Kugou"           to KuGouLyricsProvider,
-        "YouTubeSubtitle" to YouTubeSubtitleLyricsProvider,
-        "YouTubeMusic"    to YouTubeLyricsProvider,
+        "LrcLib"           to LrcLibLyricsProvider,
+        "YouTubeMusic"     to YouTubeLyricsProvider,
+        "YouTube Music"    to YouTubeLyricsProvider,
+        "YouTubeSubtitle"  to YouTubeSubtitleLyricsProvider,
+        "YouTube Subtitle" to YouTubeSubtitleLyricsProvider,
     )
 
-    val providerNames = providerMap.keys.toList()
+    val providerNames = listOf("LrcLib", "YouTubeMusic", "YouTubeSubtitle")
 
     fun getProviderByName(name: String): LyricsProvider? = providerMap[name]
 
     fun deserializeProviderOrder(orderString: String): List<String> {
         if (orderString.isBlank()) return getDefaultProviderOrder()
-        return orderString.split(",").map { it.trim() }.filter { it in providerNames }
+        val filtered = orderString.split(",").map { it.trim() }.filter { it in providerNames || it in providerMap.keys }
+        return if (filtered.isEmpty()) getDefaultProviderOrder() else filtered
     }
 
     fun serializeProviderOrder(providers: List<String>): String =
-        providers.filter { it in providerNames }.joinToString(",")
+        providers.filter { it in providerNames || it in providerMap.keys }.joinToString(",")
 
     fun getDefaultProviderOrder(): List<String> = listOf(
         "LrcLib",
-        "Paxsenix",
-        "SimpMusic",
-        "YouLyPlus",
-        "BetterLyrics",
-        "Musixmatch",
-        "YouTubeSubtitle",
         "YouTubeMusic",
-        "Kugou",
+        "YouTubeSubtitle",
     )
 
     fun getOrderedProviders(orderString: String): List<LyricsProvider> =
@@ -55,24 +46,14 @@ object LyricsProviderRegistry {
     /** Maps a [PreferredLyricsProvider] enum value to its registry name, used for migration. */
     fun getProviderNameForEnum(enum: PreferredLyricsProvider): String = when (enum) {
         PreferredLyricsProvider.LRCLIB        -> "LrcLib"
-        PreferredLyricsProvider.KUGOU         -> "Kugou"
-        PreferredLyricsProvider.BETTER_LYRICS -> "BetterLyrics"
-        PreferredLyricsProvider.SIMPMUSIC     -> "SimpMusic"
-        PreferredLyricsProvider.YOULYPLUS     -> "YouLyPlus"
-        PreferredLyricsProvider.PAXSENIX      -> "Paxsenix"
+        else                                  -> "LrcLib"
     }
 
     /** Returns the human-readable display name for a registry provider key. */
     fun getDisplayName(name: String): String = when (name) {
-        "YouLyPlus"       -> "YouLyPlus"
-        "Paxsenix"        -> "PaxSenix"
-        "Musixmatch"      -> "Musixmatch"
-        "BetterLyrics"    -> "Better Lyrics"
-        "SimpMusic"       -> "SimpMusic"
-        "LrcLib"          -> "LrcLib"
-        "Kugou"           -> "KuGou"
-        "YouTubeSubtitle" -> "YouTube Subtitle"
-        "YouTubeMusic"    -> "YouTube Music"
-        else              -> name
+        "LrcLib"                              -> "LrcLib (Karaoke)"
+        "YouTubeMusic", "YouTube Music"       -> "YouTube Music (Official)"
+        "YouTubeSubtitle", "YouTube Subtitle" -> "YouTube Subtitle (CC)"
+        else                                  -> name
     }
 }

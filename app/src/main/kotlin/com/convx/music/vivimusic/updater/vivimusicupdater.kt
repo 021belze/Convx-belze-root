@@ -332,7 +332,7 @@ fun UpdateScreen(navController: NavHostController) {
                                                 ContextCompat.startActivity(context, installIntent, null)
                                             }
                                         } else {
-                                            val urlToDownload = currentStatus.apkUrl ?: "https://github.com/cosmictaserdev-creator/Convx/releases/download/${currentStatus.version}/convx-${currentStatus.version}.apk"
+                                            val urlToDownload = currentStatus.apkUrl ?: "https://github.com/$GITHUB_REPO/releases/download/${currentStatus.version}/convx.apk"
                                             val downloadRequest = OneTimeWorkRequestBuilder<UpdateDownloadWorker>()
                                                 .setInputData(workDataOf("apk_url" to urlToDownload, "version" to currentStatus.version, "file_size" to currentStatus.size))
                                                 .addTag("update_download")
@@ -623,40 +623,103 @@ private fun formatGitHubDate(githubDate: String): String = try {
     githubDate
 }
 
-// Robust version comparison: returns true if latestVersion > currentVersion
-fun isNewerVersion(latestVersion: String, currentVersion: String): Boolean {
-    val latestVersionClean = latestVersion.removePrefix("b").removePrefix("v")
-    val currentVersionClean = currentVersion.removePrefix("b").removePrefix("v")
+const val GITHUB_REPO_OWNER = "021belze"
+const val GITHUB_REPO_NAME = "Convx-belze-root"
+const val GITHUB_REPO = "$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME"
 
-    val latestParts = latestVersionClean.split(".").map { it.toIntOrNull() ?: 0 }
-    val currentParts = currentVersionClean.split(".").map { it.toIntOrNull() ?: 0 }
-    
-    // Compare version numbers
-    for (i in 0 until maxOf(latestParts.size, currentParts.size)) {
-        val latest = latestParts.getOrElse(i) { 0 }
-        val current = currentParts.getOrElse(i) { 0 }
-        when {
-            latest > current -> return true
-            latest < current -> return false
+data class ParsedVersion(
+    val major: Int,
+    val minor: Int,
+    val patch: Int,
+    val revision: Int,
+    val isBeta: Boolean,
+)
+
+fun parseVersion(versionStr: String): ParsedVersion {
+    val isBeta = versionStr.startsWith("b", ignoreCase = true)
+    val clean = versionStr.trim().removePrefix("v").removePrefix("V").removePrefix("b").removePrefix("B")
+
+    // Split semver from suffixes: e.g. "1.5.2-R8-Optimized" -> ["1.5.2", "R8", "Optimized"]
+    val parts = clean.split(Regex("""[-_]"""))
+    val semverParts = parts.firstOrNull()?.split(".")?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+    val major = semverParts.getOrElse(0) { 0 }
+    val minor = semverParts.getOrElse(1) { 0 }
+    val patch = semverParts.getOrElse(2) { 0 }
+
+    // Check revision in any part, e.g. "r10", "R8", "rev2"
+    var rev = 0
+    for (part in parts) {
+        val rMatch = Regex("""[rR](\d+)""").find(part)
+        if (rMatch != null) {
+            rev = rMatch.groupValues[1].toIntOrNull() ?: 0
+            break
         }
     }
-    
-    // If numbers are equal, check if one is beta and the other is not
-    if (latestVersionClean == currentVersionClean) {
-        val latestIsBeta = latestVersion.startsWith("b")
-        val currentIsBeta = currentVersion.startsWith("b")
-        // Stable is "newer" (better) than beta of the same version
-        if (currentIsBeta && !latestIsBeta) return true
+    // Also check if 4th component exists in dot notation: 1.5.2.1
+    if (rev == 0 && semverParts.size > 3) {
+        rev = semverParts[3]
     }
-    
+
+    return ParsedVersion(major, minor, patch, rev, isBeta)
+}
+
+// Robust version comparison: returns true if latestVersion > currentVersion
+fun isNewerVersion(latestVersion: String, currentVersion: String): Boolean {
+    val latest = parseVersion(latestVersion)
+    val current = parseVersion(currentVersion)
+
+    if (latest.major != current.major) return latest.major > current.major
+    if (latest.minor != current.minor) return latest.minor > current.minor
+    if (latest.patch != current.patch) return latest.patch > current.patch
+    if (latest.revision != current.revision) return latest.revision > current.revision
+
+    // If numerical components are equal, stable release is newer than beta
+    if (current.isBeta && !latest.isBeta) return true
+
     return false
+}
+
+// Clean and format markdown release notes into ChangelogSection items
+fun parseMarkdownChangelog(body: String, defaultTitle: String): List<ChangelogSection> {
+    if (body.isBlank()) return emptyList()
+    val lines = body.lines()
+    val sections = mutableListOf<ChangelogSection>()
+    var currentTitle = defaultTitle
+    val currentItems = mutableListOf<String>()
+
+    for (rawLine in lines) {
+        val line = rawLine.trim()
+        if (line.isBlank() || line.startsWith("---") || line.startsWith("<") || line.startsWith("|")) {
+            continue
+        }
+        if (line.startsWith("#")) {
+            // New section header
+            if (currentItems.isNotEmpty()) {
+                sections.add(ChangelogSection(currentTitle, currentItems.toList()))
+                currentItems.clear()
+            }
+            currentTitle = line.trimStart('#').trim()
+        } else if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith("• ")) {
+            val item = line.substring(2).trim()
+            if (item.isNotBlank()) {
+                currentItems.add(item)
+            }
+        } else if (line.isNotEmpty()) {
+            currentItems.add(line)
+        }
+    }
+
+    if (currentItems.isNotEmpty()) {
+        sections.add(ChangelogSection(currentTitle, currentItems.toList()))
+    }
+    return if (sections.isNotEmpty()) sections else listOf(ChangelogSection(defaultTitle, listOf(body.trim())))
 }
 
 // Real download size of the nightly zip, from the workflow run's artifact listing.
 // Returns "" on failure so the UI simply omits the size rather than lying about it.
 private fun fetchNightlyArtifactSize(runId: Long): String = try {
     val artifactsUrl =
-        URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/actions/runs/$runId/artifacts")
+        URL("https://api.github.com/repos/$GITHUB_REPO/actions/runs/$runId/artifacts")
     val artifacts = JSONObject(artifactsUrl.openStream().bufferedReader().use { it.readText() })
         .optJSONArray("artifacts")
     val bytes = (0 until (artifacts?.length() ?: 0))
@@ -677,7 +740,7 @@ suspend fun checkForUpdate(
 ) {
     withContext(Dispatchers.IO) {
         try {
-            val url = URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/releases")
+            val url = URL("https://api.github.com/repos/$GITHUB_REPO/releases")
             val json = url.openStream().bufferedReader().use { it.readText() }
             val releases = JSONArray(json)
             
@@ -689,7 +752,7 @@ suspend fun checkForUpdate(
 
             if (betaEnabled) {
                 try {
-                    val nightlyUrl = URL("https://api.github.com/repos/cosmictaserdev-creator/Convx/actions/workflows/nightly.yml/runs?status=success&per_page=1")
+                    val nightlyUrl = URL("https://api.github.com/repos/$GITHUB_REPO/actions/workflows/nightly.yml/runs?status=success&per_page=1")
                     val nightlyJson = nightlyUrl.openStream().bufferedReader().use { it.readText() }
                     val nightlyData = JSONObject(nightlyJson)
                     val runs = nightlyData.optJSONArray("workflow_runs")
@@ -697,10 +760,6 @@ suspend fun checkForUpdate(
                         val firstRun = runs.getJSONObject(0)
                         val runNumber = firstRun.getInt("run_number")
 
-                        // The running build stamps its own nightly run number at compile time
-                        // (BuildConfig.NIGHTLY_RUN), so "is this newer" is a plain comparison
-                        // instead of a guess from install timestamps or a download-time marker.
-                        // Stable/local builds report 0, so any published nightly counts as newer.
                         if (runNumber > BuildConfig.NIGHTLY_RUN) {
                             isNightlyUpdate = true
                             nightlyRunObject = firstRun
@@ -719,14 +778,11 @@ suspend fun checkForUpdate(
                 val changelogList = mutableListOf<ChangelogSection>()
                 val headCommit = nightlyRunObject.optJSONObject("head_commit")
                 val commitMessage = headCommit?.optString("message") ?: "New features and bug fixes"
-                // Only use the subject line (first line) of the commit message.
-                // Git commit bodies (lines after the blank separator) are implementation
-                // details and should not appear as separate changelog bullet points.
                 val subjectLine = commitMessage.lineSequence().firstOrNull { it.isNotBlank() } ?: commitMessage
                 changelogList.add(ChangelogSection(context.getString(R.string.changelog), listOf(subjectLine)))
                 
                 val formattedReleaseDate = formatGitHubDate(runUpdatedAt)
-                val apkDownloadUrl = "https://nightly.link/cosmictaserdev-creator/Convx/workflows/nightly.yml/main/convx-gms-nightly.zip"
+                val apkDownloadUrl = "https://nightly.link/$GITHUB_REPO/workflows/nightly.yml/main/convx-gms-nightly.zip"
                 val apkSize = fetchNightlyArtifactSize(nightlyRunObject.getLong("id"))
 
                 withContext(Dispatchers.Main) {
@@ -741,7 +797,7 @@ suspend fun checkForUpdate(
             for (i in 0 until releases.length()) {
                 val release = releases.getJSONObject(i)
                 val tagName = release.getString("tag_name")
-                val isBeta = tagName.startsWith("b")
+                val isBeta = tagName.startsWith("b", ignoreCase = true)
                 
                 // Track best stable
                 if (!isBeta) {
@@ -763,42 +819,19 @@ suspend fun checkForUpdate(
                 val targetTagName = targetRelease.getString("tag_name")
                 val isNewer = isNewerVersion(targetTagName, currentVersion)
                 
-                // Track Switch Logic:
-                // If the user has disabled beta updates, we should offer the latest stable release
-                // even if it's technically a lower version number than their current beta/custom build.
-                // This allows users to correctly "roll back" to the stable track.
-                val currentIsBeta = currentVersion.startsWith("b")
-                val targetIsStable = targetTagName.startsWith("v")
-                
-                // Compare version numbers ignoring prefixes
-                val currentClean = currentVersion.removePrefix("b").removePrefix("v")
-                val targetClean = targetTagName.removePrefix("b").removePrefix("v")
-                val isDifferentVersion = currentClean != targetClean
-                
-                var shouldShow = isNewer
-                if (!shouldShow && !betaEnabled) {
-                    // Logic: If I'm on a Beta (b5.0.7) and latest stable is v5.0.6, 
-                    // and I just turned OFF beta, I want to see v5.0.6.
-                    if (currentIsBeta && targetIsStable) {
-                        shouldShow = true
-                    } else if (isDifferentVersion && targetIsStable) {
-                        // Also show if current is a newer unofficial stable (e.g. built locally as 5.0.7)
-                        // but user wants the official stable 5.0.6.
-                        shouldShow = true
-                    }
-                }
+                val shouldShow = isNewer
 
                 if (shouldShow) {
                     val tagWithPrefix = targetRelease.getString("tag_name")
                     val displayTag = tagWithPrefix
 
-                    // FETCH CHANGELOG.JSON FROM RELEASE ASSETS
+                    // FETCH CHANGELOG.JSON FROM RELEASE ASSETS OR PARSE MARKDOWN BODY
                     val changelogList = mutableListOf<ChangelogSection>()
                     var description: String? = null
                     var imageUrl: String? = null
                     try {
                         val changelogUrl =
-                            URL("https://github.com/cosmictaserdev-creator/Convx/releases/download/$tagWithPrefix/changelog.json")
+                            URL("https://github.com/$GITHUB_REPO/releases/download/$tagWithPrefix/changelog.json")
                         val changelogJson = changelogUrl.openStream().bufferedReader().use { it.readText() }
                         val changelogData = JSONObject(changelogJson)
 
@@ -817,32 +850,49 @@ suspend fun checkForUpdate(
                             changelogList.add(ChangelogSection(title, itemsList))
                         }
                     } catch (e: Exception) {
-                        // Fallback: Parse body as a single list if it starts with characters or split by lines
+                        // Fallback: Parse markdown release body cleanly
                         val body = targetRelease.optString("body", context.getString(R.string.no_changelog_available))
-                        val fallbackItems = body.split("\n").filter { it.isNotBlank() }
-                        changelogList.add(ChangelogSection(context.getString(R.string.changelog), fallbackItems))
+                        val parsedSections = parseMarkdownChangelog(body, context.getString(R.string.changelog))
+                        changelogList.addAll(parsedSections)
                     }
 
                     val publishedAt = targetRelease.getString("published_at")
                     val formattedReleaseDate = formatGitHubDate(publishedAt)
                     val assets = targetRelease.getJSONArray("assets")
 
-                    var apkSizeInMB = ""
-                    var apkDownloadUrl = ""
+                    var bestApkUrl = ""
+                    var bestApkSizeInMB = ""
+                    var bestMatchScore = -1
+                    val targetArch = BuildConfig.ARCHITECTURE.lowercase()
+
                     for (j in 0 until assets.length()) {
                         val asset = assets.getJSONObject(j)
-                        val assetName = asset.getString("name")
+                        val assetName = asset.getString("name").lowercase()
                         if (assetName.endsWith(".apk")) {
                             val apkSizeInBytes = asset.getLong("size")
-                            apkSizeInMB = String.format("%.1f", apkSizeInBytes / (1024.0 * 1024.0))
-                            apkDownloadUrl = asset.getString("browser_download_url")
-                            break
+                            val sizeMB = String.format("%.1f", apkSizeInBytes / (1024.0 * 1024.0))
+                            val url = asset.getString("browser_download_url")
+
+                            var score = 0
+                            if (targetArch.isNotEmpty() && (assetName.contains(targetArch) || (targetArch == "arm64" && assetName.contains("arm64-v8a")))) {
+                                score = 3
+                            } else if (assetName.contains("universal")) {
+                                score = 2
+                            } else if (assetName == "convx.apk") {
+                                score = 1
+                            }
+
+                            if (score > bestMatchScore || bestApkUrl.isEmpty()) {
+                                bestMatchScore = score
+                                bestApkUrl = url
+                                bestApkSizeInMB = sizeMB
+                            }
                         }
                     }
 
-                    if (apkDownloadUrl.isNotEmpty()) {
+                    if (bestApkUrl.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
-                            onSuccess(displayTag, true, changelogList, apkSizeInMB, formattedReleaseDate, description, imageUrl, apkDownloadUrl)
+                            onSuccess(displayTag, true, changelogList, bestApkSizeInMB, formattedReleaseDate, description, imageUrl, bestApkUrl)
                         }
                         return@withContext
                     }

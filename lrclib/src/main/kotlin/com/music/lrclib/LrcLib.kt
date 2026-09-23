@@ -2,7 +2,6 @@ package com.music.lrclib
 
 import com.music.lrclib.models.Track
 import com.music.lrclib.models.bestMatchingFor
-import com.music.lrclib.models.bestMatchingForRelaxed
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -127,7 +126,7 @@ object LrcLib {
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
         
-        // Strategy 1: Search with cleaned title and artist
+        // Fast Strategy 1: Targeted track + artist search
         var results = queryLyricsWithParams(
             trackName = cleanedTitle,
             artistName = cleanedArtist,
@@ -136,34 +135,10 @@ object LrcLib {
         
         if (results.isNotEmpty()) return results
         
-        // Strategy 2: Search with cleaned title only (artist might be different)
-        results = queryLyricsWithParams(
-            trackName = cleanedTitle
-        ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        
-        if (results.isNotEmpty()) return results
-        
-        // Strategy 3: Use q parameter with combined search
+        // Fast Strategy 2: Combined query
         results = queryLyricsWithParams(
             query = "$cleanedArtist $cleanedTitle"
         ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        
-        if (results.isNotEmpty()) return results
-        
-        // Strategy 4: Use q parameter with just title
-        results = queryLyricsWithParams(
-            query = cleanedTitle
-        ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        
-        if (results.isNotEmpty()) return results
-        
-        // Strategy 5: Try original title if different from cleaned
-        if (cleanedTitle != title.trim()) {
-            results = queryLyricsWithParams(
-                trackName = title.trim(),
-                artistName = artist.trim()
-            ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        }
         
         return results
     }
@@ -195,19 +170,9 @@ object LrcLib {
         // Fallback path: Search endpoint
         val tracks = queryLyrics(artist, title, album)
 
-        val res = when {
-            duration == -1 -> {
-                tracks.bestMatchingFor(duration, cleanedTitle, cleanedArtist)?.let { track ->
-                    track.syncedLyrics ?: track.plainLyrics
-                }?.let(LrcLib::Lyrics)
-            }
-            else -> {
-                // Try with relaxed duration matching (±5 seconds instead of ±2)
-                tracks.bestMatchingForRelaxed(duration)?.let { track ->
-                    track.syncedLyrics ?: track.plainLyrics
-                }?.let(LrcLib::Lyrics)
-            }
-        }
+        val res = tracks.bestMatchingFor(duration, cleanedTitle, cleanedArtist)?.let { track ->
+            track.syncedLyrics ?: track.plainLyrics
+        }?.let(LrcLib::Lyrics)
 
         if (res != null) {
             return@runCatching res.text
@@ -251,6 +216,11 @@ object LrcLib {
         sortedTracks.forEach { track ->
             currentCoroutineContext().ensureActive()
             if (count <= 4) {
+                // Guard: title similarity must be ≥50% to avoid serving lyrics from a
+                // completely different song that happens to share a similar duration.
+                val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
+                if (titleSim < 0.50) return@forEach
+
                 if (track.syncedLyrics != null && duration == -1) {
                     count++
                     track.syncedLyrics.let(callback)

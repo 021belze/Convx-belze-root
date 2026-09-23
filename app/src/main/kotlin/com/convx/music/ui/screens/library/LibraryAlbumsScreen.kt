@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -96,7 +97,7 @@ import com.convx.music.ui.utils.rememberHeroZoom
 @Composable
 fun LibraryAlbumsScreen(
     navController: NavController,
-    onDeselect: () -> Unit,
+    filterContent: @Composable () -> Unit,
     viewModel: LibraryAlbumsViewModel = hiltViewModel(),
 ) {
     val menuState = LocalMenuState.current
@@ -123,23 +124,14 @@ fun LibraryAlbumsScreen(
     val (ytmSync) = rememberPreference(YtmSyncKey, true)
     val hideExplicit by rememberPreference(key = HideExplicitKey, defaultValue = false)
 
-    val filterContent = @Composable {
-        Row {
-            Spacer(Modifier.width(12.dp))
-            FilterChip(
-                label = { Text(stringResource(R.string.albums)) },
-                selected = true,
-                colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
-                onClick = onDeselect,
-                shape = RoundedCornerShape(16.dp),
-                leadingIcon = {
-                    Icon(painter = painterResource(R.drawable.close), contentDescription = "")
-                },
-            )
-            if (!localOnly) {
+    val subFilterContent = @Composable {
+        if (!localOnly) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
+            ) {
                 ChipsRow(
-                    chips =
-                    listOf(
+                    chips = listOf(
                         AlbumFilter.LIKED to stringResource(R.string.filter_liked),
                         AlbumFilter.LIBRARY to stringResource(R.string.filter_library),
                         AlbumFilter.UPLOADED to stringResource(R.string.filter_uploaded),
@@ -149,7 +141,7 @@ fun LibraryAlbumsScreen(
                     onValueUpdate = {
                         storedFilter = it
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -206,6 +198,7 @@ fun LibraryAlbumsScreen(
                         AlbumSortType.PLAY_TIME -> R.string.sort_by_play_time
                     }
                 },
+                modifier = Modifier.weight(1f, fill = false),
             )
 
             Spacer(Modifier.weight(1f))
@@ -215,6 +208,8 @@ fun LibraryAlbumsScreen(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
             )
+
+            Spacer(Modifier.width(8.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
@@ -278,6 +273,15 @@ fun LibraryAlbumsScreen(
                         filterContent()
                     }
 
+                    if (!localOnly) {
+                        item(
+                            key = "subfilter",
+                            contentType = CONTENT_TYPE_HEADER,
+                        ) {
+                            subFilterContent()
+                        }
+                    }
+
                     item(
                         key = "header",
                         contentType = CONTENT_TYPE_HEADER,
@@ -334,6 +338,16 @@ fun LibraryAlbumsScreen(
                         contentType = CONTENT_TYPE_HEADER,
                     ) {
                         filterContent()
+                    }
+
+                    if (!localOnly) {
+                        item(
+                            key = "subfilter",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = CONTENT_TYPE_HEADER,
+                        ) {
+                            subFilterContent()
+                        }
                     }
 
                     item(

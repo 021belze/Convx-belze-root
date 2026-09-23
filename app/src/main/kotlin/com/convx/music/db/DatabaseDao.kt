@@ -1990,6 +1990,9 @@ interface DatabaseDao {
     @Delete
     fun delete(lyrics: LyricsEntity)
 
+    @Query("DELETE FROM lyrics WHERE provider NOT IN ('LrcLib', 'YouTubeMusic', 'YouTubeSubtitle', 'Unknown')")
+    fun deleteStaleLyrics()
+
     @Delete
     fun delete(searchHistory: SearchHistory)
 

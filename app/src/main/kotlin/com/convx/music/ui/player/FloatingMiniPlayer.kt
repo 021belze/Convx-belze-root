@@ -5,10 +5,16 @@
 
 package com.convx.music.ui.player
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -278,9 +284,9 @@ fun FloatingMiniPlayer(
         // FloatingSideBar), so its icons/thumbnail scale with it instead of
         // looking tiny in a tall pill or cramped in a short one.
         val measuredHeight = with(density) { measuredHeightPx.toDp() }
-        val artSize = if (isInline) 36.dp else (measuredHeight * 0.6f).coerceIn(36.dp, 60.dp)
-        val artCornerRadius = if (isInline) 9.dp else artSize * 0.22f
-        val controlSize = if (isInline) 36.dp else (measuredHeight * 0.55f).coerceIn(36.dp, 52.dp)
+        val artSize = if (!tabStyle) 36.dp else (measuredHeight * 0.6f).coerceIn(36.dp, 60.dp)
+        val artCornerRadius = if (!tabStyle) 9.dp else artSize * 0.22f
+        val controlSize = if (!tabStyle) 36.dp else (measuredHeight * 0.55f).coerceIn(36.dp, 52.dp)
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -293,11 +299,17 @@ fun FloatingMiniPlayer(
                     onClick = onClick,
                 )
                 .padding(
-                    horizontal = if (isInline) 10.dp else 12.dp,
-                    vertical = if (isInline) 6.dp else 8.dp,
+                    horizontal = 10.dp,
+                    vertical = 6.dp,
                 ),
         ) {
-            if (isInline) {
+            if (!tabStyle) {
+                // iOS-style mini bar: unified responsive structure between expanded and inline.
+                // Waveform and Next button smoothly animate out when scrolling minimizes the bar.
+                val playIconSize = 22.dp
+                val playbackFraction = rememberPlaybackFraction(playerConnection.player, isPlaying)
+                val waveformSeed = remember(mediaMetadata?.id) { mediaMetadata?.id?.hashCode() ?: 0 }
+
                 AsyncImage(
                     model = mediaMetadata?.thumbnailUrl,
                     contentDescription = null,
@@ -338,89 +350,33 @@ fun FloatingMiniPlayer(
                     )
                 }
 
-                IconButton(
-                    onClick = { playerConnection.player.togglePlayPause() },
-                    modifier = Modifier.size(controlSize),
+                AnimatedVisibility(
+                    visible = !isInline && miniPlayerWaveform,
+                    enter = fadeIn(tween(140)) + expandHorizontally(tween(160)),
+                    exit = fadeOut(tween(120)) + shrinkHorizontally(tween(140)),
                 ) {
-                    AnimatedPlayPauseIcon(
-                        isPlaying = isPlaying,
-                        tint = contentColor,
-                        size = 20.dp,
-                    )
-                }
-            } else if (!tabStyle) {
-                // iOS-style mini bar (default): thumbnail, title/artist, a wave
-                // seek bar, play/pause, and forward (skip next).
-                val iconSize = controlSize * 0.5f
-                val playIconSize = controlSize * 0.6f
-                // Keep the State, don't unwrap it: rememberPlaybackFraction samples
-                // withFrameMillis, so a `by` delegate read here recomposes the whole
-                // mini player every frame while playing. Only the seek bar's progress
-                // lambda below needs the value, and that reads it in the draw phase.
-                val playbackFraction = rememberPlaybackFraction(playerConnection.player, isPlaying)
-                val waveformSeed = remember(mediaMetadata?.id) { mediaMetadata?.id?.hashCode() ?: 0 }
-
-                AsyncImage(
-                    model = mediaMetadata?.thumbnailUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(R.drawable.thumbnail_fallback),
-                    error = painterResource(R.drawable.thumbnail_fallback),
-                    modifier = Modifier
-                        .size(artSize)
-                        // Registers this box's on-screen bounds for
-                        // PlayerArtworkMorphOverlay -- this is the real, visible mini
-                        // player (docked in the floating nav bar); MiniPlayer.kt's own
-                        // collapsedContent renders at collapsedBound = 0.dp now and is
-                        // never actually on screen.
-                        .registerMiniArtworkRect(with(density) { artCornerRadius.toPx() })
-                        // The cover is flown by PlayerArtworkMorphOverlay for the whole
-                        // flight; without this the copy baked into the pill's recording
-                        // rides along underneath it.
-                        .hideWhileMorphing()
-                        .clip(RoundedCornerShape(artCornerRadius)),
-                )
-
-                Spacer(Modifier.width(10.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = mediaMetadata?.title.orEmpty(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = mediaMetadata?.artists?.joinToString { it.name }.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = contentColor.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(6.dp))
+                        ScrollingWaveformSeekBar(
+                            progress = { playbackFraction.value },
+                            onSeek = { frac ->
+                                val duration = playerConnection.player.duration
+                                if (duration > 0) {
+                                    playerConnection.player.seekTo((frac * duration).toLong())
+                                }
+                            },
+                            playedColor = contentColor,
+                            trackColor = contentColor.copy(alpha = 0.3f),
+                            seed = waveformSeed,
+                            visibleBars = 14,
+                            modifier = Modifier
+                                .width(64.dp)
+                                .height(22.dp),
+                        )
+                    }
                 }
 
-                if (miniPlayerWaveform) {
-                    Spacer(Modifier.width(8.dp))
-                    ScrollingWaveformSeekBar(
-                        progress = { playbackFraction.value },
-                        onSeek = { frac ->
-                            val duration = playerConnection.player.duration
-                            if (duration > 0) {
-                                playerConnection.player.seekTo((frac * duration).toLong())
-                            }
-                        },
-                        playedColor = contentColor,
-                        trackColor = contentColor.copy(alpha = 0.3f),
-                        seed = waveformSeed,
-                        visibleBars = 14,
-                        modifier = Modifier
-                            .width(64.dp)
-                            .height(22.dp),
-                    )
-                }
-
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(6.dp))
 
                 IconButton(
                     onClick = { playerConnection.player.togglePlayPause() },
@@ -432,17 +388,24 @@ fun FloatingMiniPlayer(
                         size = playIconSize,
                     )
                 }
-                IconButton(
-                    onClick = { playerConnection.seekToNext() },
-                    enabled = canSkipNext,
-                    modifier = Modifier.size(controlSize),
+
+                AnimatedVisibility(
+                    visible = !isInline,
+                    enter = fadeIn(tween(140)) + expandHorizontally(tween(160)),
+                    exit = fadeOut(tween(120)) + shrinkHorizontally(tween(140)),
                 ) {
-                    PlayerGlyph(
-                        slot = PlayerIconSlot.NEXT,
-                        fallback = R.drawable.fast_forward,
-                        tint = if (canSkipNext) contentColor else contentColor.copy(alpha = 0.4f),
-                        modifier = Modifier.size(playIconSize),
-                    )
+                    IconButton(
+                        onClick = { playerConnection.seekToNext() },
+                        enabled = canSkipNext,
+                        modifier = Modifier.size(controlSize),
+                    ) {
+                        PlayerGlyph(
+                            slot = PlayerIconSlot.NEXT,
+                            fallback = R.drawable.fast_forward,
+                            tint = if (canSkipNext) contentColor else contentColor.copy(alpha = 0.4f),
+                            modifier = Modifier.size(playIconSize),
+                        )
+                    }
                 }
             } else {
                 // Tablet floating pill: matches the Apple Music iPad now-playing

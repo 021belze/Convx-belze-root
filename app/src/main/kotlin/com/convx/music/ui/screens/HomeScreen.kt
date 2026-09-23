@@ -960,7 +960,8 @@ fun HomeScreen(
         communityPlaylists,
         similarRecommendations,
         homePage?.sections,
-        explorePage?.moodAndGenres
+        explorePage?.moodAndGenres,
+        selectedChip
     ) {
         val hidden = hiddenSectionIds.lineSequence()
             .map(String::trim)
@@ -968,30 +969,38 @@ fun HomeScreen(
             .toSet()
         val list = mutableListOf<HomeSection>()
 
-        if (heroCardEnabled && quickPicks?.isNotEmpty() == true) list.add(HomeSection.Hero)
-        // Speed Dial section commented out per request -- gated out here rather than
-        // deleting the section's rendering code, so it is one line to bring back.
-        // if (speedDialItems.isNotEmpty()) list.add(HomeSection.SpeedDial)
-        if (quickPicks?.isNotEmpty() == true) list.add(HomeSection.QuickPicks)
-        if (communityPlaylists?.isNotEmpty() == true) list.add(HomeSection.FromTheCommunity)
-        if (dailyDiscover?.isNotEmpty() == true) list.add(HomeSection.DailyDiscover)
-        if (keepListening?.isNotEmpty() == true) list.add(HomeSection.KeepListening)
-        if (accountPlaylists?.isNotEmpty() == true) list.add(HomeSection.AccountPlaylists)
-        if (forgottenFavorites?.isNotEmpty() == true) list.add(HomeSection.ForgottenFavorites)
+        if (selectedChip != null) {
+            // When filtered by a mood chip, prioritize the filtered feed directly
+            homePage?.sections?.indices?.forEach { i ->
+                list.add(HomeSection.HomePageSection(i))
+            }
+            return@remember list
+        } else {
+            if (heroCardEnabled && quickPicks?.isNotEmpty() == true) list.add(HomeSection.Hero)
+            // Speed Dial section commented out per request -- gated out here rather than
+            // deleting the section's rendering code, so it is one line to bring back.
+            // if (speedDialItems.isNotEmpty()) list.add(HomeSection.SpeedDial)
+            if (quickPicks?.isNotEmpty() == true) list.add(HomeSection.QuickPicks)
+            if (communityPlaylists?.isNotEmpty() == true) list.add(HomeSection.FromTheCommunity)
+            if (dailyDiscover?.isNotEmpty() == true) list.add(HomeSection.DailyDiscover)
+            if (keepListening?.isNotEmpty() == true) list.add(HomeSection.KeepListening)
+            if (accountPlaylists?.isNotEmpty() == true) list.add(HomeSection.AccountPlaylists)
+            if (forgottenFavorites?.isNotEmpty() == true) list.add(HomeSection.ForgottenFavorites)
 
-        // Capped. The survey's most concrete complaint was "I have to see 4 to 6
-        // similar-to sections that I don't want", and each extra section is ~12 more
-        // simultaneously composed rows — the single largest driver of Home's frame cost
-        // (content alone measured 14ms/frame against an 8.33ms budget).
-        similarRecommendations?.indices?.take(MaxSimilarSections)?.forEach { i ->
-            list.add(HomeSection.SimilarRecommendation(i))
+            // Capped. The survey's most concrete complaint was "I have to see 4 to 6
+            // similar-to sections that I don't want", and each extra section is ~12 more
+            // simultaneously composed rows — the single largest driver of Home's frame cost
+            // (content alone measured 14ms/frame against an 8.33ms budget).
+            similarRecommendations?.indices?.take(MaxSimilarSections)?.forEach { i ->
+                list.add(HomeSection.SimilarRecommendation(i))
+            }
+
+            homePage?.sections?.indices?.take(MaxHomePageSections)?.forEach { i ->
+                list.add(HomeSection.HomePageSection(i))
+            }
+
+            if (explorePage?.moodAndGenres != null) list.add(HomeSection.MoodAndGenres)
         }
-
-        homePage?.sections?.indices?.take(MaxHomePageSections)?.forEach { i ->
-            list.add(HomeSection.HomePageSection(i))
-        }
-
-        if (explorePage?.moodAndGenres != null) list.add(HomeSection.MoodAndGenres)
 
         // Filtered once here rather than at each `if` above: the section list is built
         // from a dozen separate conditions, and a hidden check on every one of them is a

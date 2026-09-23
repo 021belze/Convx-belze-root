@@ -23,6 +23,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -46,6 +50,10 @@ import com.convx.music.ui.component.shapes.ContinuousRoundedRectangle
  * the app backdrop from a root-level overlay is exactly the RenderNode cycle the glass
  * chrome has to avoid elsewhere. The dim reads the same and costs nothing.
  */
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+
 @Composable
 fun OverlayMenu(
     state: MenuState,
@@ -53,6 +61,10 @@ fun OverlayMenu(
     background: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
 ) {
     val focusManager = LocalFocusManager.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val maxHeight = (configuration.screenHeightDp - if (isLandscape) 16 else 32).dp
+    val maxWidth = if (isLandscape) 740.dp else MenuMaxWidth
 
     fun dismiss() {
         focusManager.clearFocus()
@@ -77,35 +89,45 @@ fun OverlayMenu(
                     indication = null,
                     onClick = ::dismiss,
                 ),
-            contentAlignment = Alignment.BottomCenter,
+            contentAlignment = if (isLandscape) Alignment.Center else Alignment.BottomCenter,
         ) {
             BackHandler(onBack = ::dismiss)
 
-            // The scrim fades (above); the menu itself rises. Two AnimatedVisibilities
-            // rather than one enter spec, because a slide on the outer one would drag the
-            // full-screen scrim up with it.
+            // The scrim fades (above); the menu itself rises in portrait or fades in landscape.
             AnimatedVisibility(
                 visible = state.isVisible,
-                enter = slideInVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    initialOffsetY = { it },
-                ) + fadeIn(),
-                exit = slideOutVertically(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                    targetOffsetY = { it },
-                ) + fadeOut(),
+                enter = if (isLandscape) {
+                    fadeIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+                } else {
+                    slideInVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                        initialOffsetY = { it },
+                    ) + fadeIn()
+                },
+                exit = if (isLandscape) {
+                    fadeOut(spring(stiffness = Spring.StiffnessMedium))
+                } else {
+                    slideOutVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        targetOffsetY = { it },
+                    ) + fadeOut()
+                },
             ) {
                 Column(
                     modifier = Modifier
-                        .windowInsetsPadding(LocalPlayerAwareWindowInsets.current)
+                        .windowInsetsPadding(
+                            if (isLandscape) WindowInsets.systemBars
+                            else WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                        )
                         .imePadding()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
-                        .widthIn(max = MenuMaxWidth)
+                        .padding(horizontal = if (isLandscape) 16.dp else 12.dp, vertical = if (isLandscape) 6.dp else 12.dp)
+                        .widthIn(max = maxWidth)
+                        .heightIn(max = maxHeight)
                         .fillMaxWidth()
-                        .background(background, ContinuousRoundedRectangle(28.dp))
+                        .background(background, ContinuousRoundedRectangle(if (isLandscape) 24.dp else 28.dp))
                         // Swallows taps so a press on the menu itself does not reach the
                         // scrim's dismiss handler underneath.
                         .clickable(
@@ -117,8 +139,8 @@ fun OverlayMenu(
                         // this Column, and a lazy list measured inside a scrolling parent gets
                         // an infinite height constraint and throws. The menus scroll
                         // themselves; this Column only has to stay bounded, which the
-                        // fillMaxSize parent already guarantees.
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        // fillMaxSize parent and heightIn guarantee.
+                        .padding(horizontal = if (isLandscape) 16.dp else 20.dp, vertical = if (isLandscape) 8.dp else 12.dp),
                     content = { state.content(this) },
                 )
             }

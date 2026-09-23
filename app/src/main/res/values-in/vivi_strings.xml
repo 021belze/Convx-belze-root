@@ -205,6 +205,7 @@
     <string name="check_for_updates">Periksa pembaruan secara otomatis</string>
     <string name="update_notifications">Aktifkan notifikasi pembaruan</string>
     <string name="update_available_title">Pembaruan tersedia</string>
+    <string name="update_now">Update Sekarang</string>
     <string name="lyrics_romanize_macedonian">Romanisasi lirik Makedonia</string>
     <string name="integrations">Integrasi</string>
     <string name="lastfm_integration">Integrasi Last.fm</string>

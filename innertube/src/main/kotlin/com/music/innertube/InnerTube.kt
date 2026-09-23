@@ -417,13 +417,10 @@ class InnerTube {
         videoId: String,
     ) = withRetry {
         httpClient.post("https://music.youtube.com/youtubei/v1/get_transcript") {
-            parameter("key", "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX3")
-            headers {
-                append("Content-Type", "application/json")
-            }
+            ytClient(client, setLogin = false)
             setBody(
                 GetTranscriptBody(
-                    context = client.toContext(locale, null, null),
+                    context = client.toContext(locale, visitorData, null),
                     params = Base64.Default.encode(
                         "\n${11.toChar()}$videoId".encodeToByteArray()
                     )

@@ -30,13 +30,12 @@ object UpdateNotificationHelper {
             nm.createNotificationChannel(channel)
         }
 
-        // Direct download URL format from vivimusicupdater - use the full tag (vX.X.X or bX.X.X) or nightly link
-        val apkUrl = if (versionName.contains("nightly", ignoreCase = true)) {
-            "https://nightly.link/cosmictaserdev-creator/Convx/workflows/nightly.yml/main/convx-gms-nightly.zip"
-        } else {
-            "https://github.com/cosmictaserdev-creator/Convx/releases/download/$versionName/convx-$versionName.apk"
+        // Open in-app updater directly without redirecting to browser/repo
+        val intent = Intent(context, com.convx.music.MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("open_updater", true)
         }
-        val intent = Intent(Intent.ACTION_VIEW, apkUrl.toUri())
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val pending = PendingIntent.getActivity(context, NOTIFICATION_ID, intent, flags)

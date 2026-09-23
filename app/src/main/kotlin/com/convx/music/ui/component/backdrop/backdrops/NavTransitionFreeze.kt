@@ -50,6 +50,11 @@ class NavTransitionFreeze {
 @Composable
 fun rememberNavTransitionFreeze(currentRoute: String?): NavTransitionFreeze {
     val freeze = remember { NavTransitionFreeze() }
+    val lastRoute = remember { androidx.compose.runtime.mutableStateOf(currentRoute) }
+    if (currentRoute != lastRoute.value) {
+        lastRoute.value = currentRoute
+        freeze.markTransitionStarted()
+    }
     LaunchedEffect(currentRoute) {
         freeze.markTransitionStarted()
     }

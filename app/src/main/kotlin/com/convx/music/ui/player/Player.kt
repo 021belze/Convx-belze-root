@@ -1268,7 +1268,7 @@ fun BottomSheetPlayer(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .background(Color.Black.copy(alpha = 0.3f))
+                                            .background(Color.Black.copy(alpha = 0.45f))
                                     )
                                 }
                             }
@@ -1580,8 +1580,8 @@ fun BottomSheetPlayer(
                                             .background(
                                                 Brush.verticalGradient(
                                                     listOf(
-                                                        Color.Black.copy(alpha = 0.05f),
-                                                        Color.Black.copy(alpha = 0.4f)
+                                                        Color.Black.copy(alpha = 0.35f),
+                                                        Color.Black.copy(alpha = 0.60f)
                                                     )
                                                 )
                                             )
@@ -3424,29 +3424,35 @@ fun InlineLyricsView(
     positionProvider: () -> Long
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
-    val currentLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue =null)
+    val rawLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue = null)
+    val allowedProviders = remember { setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown") }
+    val currentLyrics = remember(rawLyrics) {
+        if (rawLyrics != null && rawLyrics!!.provider !in allowedProviders) null else rawLyrics
+    }
     val lyrics = remember(currentLyrics) { currentLyrics?.lyrics?.trim() }
     val context = LocalContext.current
     val database = LocalDatabase.current
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(mediaMetadata?.id, currentLyrics) {
-        if (mediaMetadata != null && currentLyrics == null) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val entryPoint = EntryPointAccessors.fromApplication(
-                        context.applicationContext,
-                        com.convx.music.di.LyricsHelperEntryPoint::class.java
-                    )
-                    val lyricsHelper = entryPoint.lyricsHelper()
-                    val fetchedLyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
-                    if (fetchedLyricsWithProvider.lyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+    LaunchedEffect(mediaMetadata?.id, rawLyrics) {
+        if (mediaMetadata != null) {
+            val raw = rawLyrics
+            val isInvalid = raw != null && raw.provider !in allowedProviders
+            if (raw == null || isInvalid) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val entryPoint = EntryPointAccessors.fromApplication(
+                            context.applicationContext,
+                            com.convx.music.di.LyricsHelperEntryPoint::class.java
+                        )
+                        val lyricsHelper = entryPoint.lyricsHelper()
+                        val fetchedLyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
                         database.query {
                             upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
                         }
+                    } catch (e: Exception) {
+                        // Handle error
                     }
-                } catch (e: Exception) {
-                    // Handle error
                 }
             }
         }
@@ -3463,12 +3469,30 @@ fun InlineLyricsView(
                 ContainedLoadingIndicator()
             }
             lyrics == LyricsEntity.LYRICS_NOT_FOUND -> {
-                Text(
-                    text = stringResource(R.string.lyrics_not_found),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.lyrics),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Text(
+                        text = "Lagu ini tidak memiliki lirik",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Nikmati instrumen musik ini",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
             else -> {
                 val lyricsContent: @Composable () -> Unit = {

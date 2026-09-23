@@ -9,7 +9,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
@@ -55,29 +58,32 @@ fun Modifier.pressWobble(
  * bring the bounce back, implement it as a Modifier.Node — not with `composed`.
  */
 
-/** Clickable with no ripple by default. */
+
+/** Clickable with ripple feedback by default. */
+@Composable
 fun Modifier.bounceClick(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource? = null,
-    indication: Indication? = null,
+    indication: Indication? = ripple(),
     onClick: () -> Unit
 ): Modifier = clickable(
-    interactionSource = interactionSource,
+    interactionSource = interactionSource ?: remember { MutableInteractionSource() },
     indication = indication,
     enabled = enabled,
     onClick = onClick
 )
 
-/** [combinedClickable] with no ripple by default. */
+/** [combinedClickable] with ripple feedback by default. */
+@Composable
 fun Modifier.combinedBounceClick(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource? = null,
-    indication: Indication? = null,
+    indication: Indication? = ripple(),
     onLongClick: (() -> Unit)? = null,
     onDoubleClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ): Modifier = combinedClickable(
-    interactionSource = interactionSource,
+    interactionSource = interactionSource ?: remember { MutableInteractionSource() },
     indication = indication,
     enabled = enabled,
     onLongClick = onLongClick,

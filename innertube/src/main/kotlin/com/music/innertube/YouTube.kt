@@ -676,25 +676,23 @@ object YouTube {
         )
     }
 
-    suspend fun home(continuation: String? = null, params: String? = null): Result<HomePage> = runCatching {
+    suspend fun home(continuation: String? = null, params: String? = null, browseId: String = "FEmusic_home"): Result<HomePage> = runCatching {
         if (continuation != null) {
             return@runCatching homeContinuation(continuation).getOrThrow()
         }
 
-        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_home", params = params).body<BrowseResponse>()
-        val continuation = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
-            ?.tabRenderer?.content?.sectionListRenderer?.continuations?.getContinuation()
-        val sectionListRender = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
-            ?.tabRenderer?.content?.sectionListRenderer
-        // A shape YouTube sometimes serves (empty/guest feed, transient response
-        // variant) has no sectionListRenderer contents at all. Force-unwrapping
-        // that threw an NPE that runCatching swallowed, silently failing the
-        // whole home load — same bug class as the Liked Music header NPE.
-        // Degrade to an empty (still valid) page instead of failing outright.
+        val response = innerTube.browse(WEB_REMIX, browseId = browseId, params = params).body<BrowseResponse>()
+        val sectionListRender = response.contents?.sectionListRenderer
+            ?: response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
+                ?.tabRenderer?.content?.sectionListRenderer
+        val continuation = sectionListRender?.continuations?.getContinuation()
+            ?: response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
+                ?.tabRenderer?.content?.sectionListRenderer?.continuations?.getContinuation()
+
         val sections = sectionListRender?.contents.orEmpty()
-            .mapNotNull { it.musicCarouselShelfRenderer }
-            .mapNotNull {
-                HomePage.Section.fromMusicCarouselShelfRenderer(it)
+            .mapNotNull { content ->
+                content.musicCarouselShelfRenderer?.let { HomePage.Section.fromMusicCarouselShelfRenderer(it) }
+                    ?: content.musicShelfRenderer?.let { HomePage.Section.fromMusicShelfRenderer(it) }
             }.toMutableList()
         val chips = sectionListRender?.header?.chipCloudRenderer?.chips?.mapNotNull { HomePage.Chip.fromChipCloudChipRenderer(it) }
         HomePage(chips, sections, continuation)
@@ -703,15 +701,15 @@ object YouTube {
     private suspend fun homeContinuation(continuation: String): Result<HomePage> = runCatching {
         val response =
             innerTube.browse(WEB_REMIX, continuation = continuation).body<BrowseResponse>()
-        val continuation =
+        val nextContinuation =
             response.continuationContents?.sectionListContinuation?.continuations?.getContinuation()
         HomePage(
             null,
             response.continuationContents?.sectionListContinuation?.contents
-            ?.mapNotNull { it.musicCarouselShelfRenderer }
-            ?.mapNotNull {
-                HomePage.Section.fromMusicCarouselShelfRenderer(it)
-            }.orEmpty(), continuation
+            ?.mapNotNull { content ->
+                content.musicCarouselShelfRenderer?.let { HomePage.Section.fromMusicCarouselShelfRenderer(it) }
+                    ?: content.musicShelfRenderer?.let { HomePage.Section.fromMusicShelfRenderer(it) }
+            }.orEmpty(), nextContinuation
         )
     }
 
@@ -1352,14 +1350,33 @@ object YouTube {
     }
 
     suspend fun transcript(videoId: String): Result<String> = runCatching {
-        val response = innerTube.getTranscript(WEB, videoId).body<GetTranscriptResponse>()
-        response.actions?.firstOrNull()?.updateEngagementPanelAction?.content?.transcriptRenderer?.body?.transcriptBodyRenderer?.cueGroups?.joinToString(separator = "\n") { group ->
-            val time = group.transcriptCueGroupRenderer.cues[0].transcriptCueRenderer.startOffsetMs
-            val text = group.transcriptCueGroupRenderer.cues[0].transcriptCueRenderer.cue.simpleText
-                .trim('♪')
-                .trim(' ')
-            "[%02d:%02d.%03d]$text".format(time / 60000, (time / 1000) % 60, time % 1000)
-        }!!
+        val response = innerTube.getTranscript(WEB_REMIX, videoId).body<GetTranscriptResponse>()
+        val cueGroups = response.actions
+            ?.firstOrNull()
+            ?.updateEngagementPanelAction
+            ?.content
+            ?.transcriptRenderer
+            ?.body
+            ?.transcriptBodyRenderer
+            ?.cueGroups
+        if (cueGroups.isNullOrEmpty()) {
+            throw IllegalStateException("Transcript unavailable or empty for videoId=$videoId")
+        }
+        val allCues = cueGroups.flatMap { group ->
+            group.transcriptCueGroupRenderer.cues.mapNotNull { it.transcriptCueRenderer }
+        }.mapNotNull { cue ->
+            val text = cue.cue.simpleText.trim('♪', ' ', '\n', '\r')
+            if (text.isNotBlank()) {
+                val time = cue.startOffsetMs
+                "[%02d:%02d.%03d]$text".format(time / 60000, (time / 1000) % 60, time % 1000)
+            } else {
+                null
+            }
+        }
+        if (allCues.isEmpty()) {
+            throw IllegalStateException("Transcript was blank for videoId=$videoId")
+        }
+        allCues.joinToString(separator = "\n")
     }
 
     suspend fun visitorData(): Result<String> = runCatching {

@@ -68,7 +68,8 @@ import java.net.URLEncoder
 fun SuggestionsTabContent(
     navController: NavController,
     viewModel: SuggestionsViewModel = hiltViewModel(),
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onDismiss: () -> Unit = {}
 ) {
     val suggestionTracks by viewModel.suggestionTracks.collectAsState()
     val suggestionArtists by viewModel.suggestionArtists.collectAsState()
@@ -151,7 +152,7 @@ fun SuggestionsTabContent(
                         artists = artists,
                         onArtistClick = { artist ->
                             android.widget.Toast.makeText(context, "Loading ${artist.name}...", android.widget.Toast.LENGTH_SHORT).show()
-                            viewModel.navigateToArtist(artist, navController)
+                            viewModel.navigateToArtist(artist, navController, onDismiss)
                         }
                     )
                 }
@@ -163,7 +164,7 @@ fun SuggestionsTabContent(
                         albums = albums,
                         onAlbumClick = { album ->
                             android.widget.Toast.makeText(context, "Loading ${album.title}...", android.widget.Toast.LENGTH_SHORT).show()
-                            viewModel.navigateToAlbum(album, navController)
+                            viewModel.navigateToAlbum(album, navController, onDismiss)
                         },
                         onMoreClick = {
                             val code = if (regionCode == "system") java.util.Locale.getDefault().country.lowercase() else regionCode.lowercase()
@@ -257,7 +258,7 @@ fun TrendingAppleMusicSection(
         HorizontalPager(
             state = pagerState,
             verticalAlignment = Alignment.Top,
-            modifier = Modifier.fillMaxWidth().animateContentSize(tween(300, easing = FastOutSlowInEasing))
+            modifier = Modifier.fillMaxWidth()
         ) { page ->
             Column(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -304,15 +305,10 @@ fun TrendingAppleMusicSection(
                                 }
                             }
                             if (track.thumbnailUrl != null) {
-                                SubcomposeAsyncImage(
+                                AsyncImage(
                                     model = track.thumbnailUrl,
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
-                                    loading = {
-                                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            LoadingIndicator()
-                                        }
-                                    },
                                     modifier = Modifier.padding(16.dp).clip(MaterialTheme.shapes.large).size(80.dp)
                                 )
                             }
@@ -352,15 +348,10 @@ fun TopArtistsSection(
             items(artists) { artist ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(100.dp).bounceClick { onArtistClick(artist) }) {
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        SubcomposeAsyncImage(
+                        AsyncImage(
                             model = artist.thumbnailUrl,
                             contentDescription = artist.name,
                             contentScale = ContentScale.Crop,
-                            loading = {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    LoadingIndicator()
-                                }
-                            },
                             modifier = Modifier.size(100.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         )
                         Surface(modifier = Modifier.size(28.dp).offset((-4).dp, (-4).dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary, tonalElevation = 4.dp) {
@@ -403,15 +394,10 @@ fun TrendingAlbumsSection(
             items(albums) { album ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(120.dp).bounceClick { onAlbumClick(album) }) {
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        SubcomposeAsyncImage(
+                        AsyncImage(
                             model = album.thumbnailUrl,
                             contentDescription = album.title,
                             contentScale = ContentScale.Crop,
-                            loading = {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    LoadingIndicator()
-                                }
-                            },
                             modifier = Modifier.size(120.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
                         )
                         Surface(modifier = Modifier.size(28.dp).offset((-4).dp, (-4).dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary, tonalElevation = 4.dp) {

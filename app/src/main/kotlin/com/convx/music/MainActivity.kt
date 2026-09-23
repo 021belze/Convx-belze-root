@@ -296,6 +296,7 @@ import com.convx.music.ui.theme.rememberBrandFontFamily
 import com.convx.music.ui.theme.extractThemeColor
 import com.convx.music.ui.theme.extractThemeColorFromVideoFrame
 import com.convx.music.ui.theme.vivimusicTheme
+import com.convx.music.ui.theme.LocalDynamicPlayerThemeColor
 import com.convx.music.ui.utils.appBarScrollBehavior
 import com.convx.music.ui.utils.resetHeightOffset
 import com.convx.music.utils.SyncUtils
@@ -313,6 +314,8 @@ import com.convx.music.utils.setAppLocale
 import com.convx.music.viewmodels.HistoryViewModel
 import com.convx.music.ui.component.floatingtabbar.rememberFloatingTabBarScrollConnection
 import com.convx.music.viewmodels.HomeViewModel
+import com.convx.music.ui.component.InAppUpdateDialog
+import com.convx.music.ui.component.UpdateDialogData
 import com.convx.music.vivimusic.UpdateNotificationHelper
 import com.convx.music.vivimusic.updater.checkForUpdate
 import com.convx.music.vivimusic.updater.getAutoUpdateCheckSetting
@@ -600,6 +603,7 @@ class MainActivity : ComponentActivity() {
         val enableDynamicTheme by rememberPreference(DynamicThemeKey, defaultValue = true)
         val enableHighRefreshRate by rememberPreference(EnableHighRefreshRateKey, defaultValue = true)
         val context = LocalContext.current
+        var updateDialogData by remember { mutableStateOf<UpdateDialogData?>(null) }
 
         LaunchedEffect(Unit) {
             if (getAutoUpdateCheckSetting(context)) {
@@ -607,14 +611,23 @@ class MainActivity : ComponentActivity() {
                 delay(2000L.milliseconds)
                 checkForUpdate(
                     context = context,
-                    onSuccess = { latestVersion, isAvailable, _, _, _, _, _, _ ->
+                    onSuccess = { latestVersion, isAvailable, changelog, size, date, _, _, apkUrl ->
                         val currentVersion = BuildConfig.VERSION_NAME
                         Timber.tag("UpdateCheck").d("Startup check success. Latest: $latestVersion, Current: $currentVersion, isAvailable: $isAvailable")
                         saveUpdateAvailableState(context, isAvailable)
                         
-                        if (isAvailable && getUpdateNotificationsSetting(context)) {
-                            Timber.tag("UpdateCheck").d("Posting update notification for $latestVersion")
-                            UpdateNotificationHelper.showUpdateNotification(context, latestVersion)
+                        if (isAvailable) {
+                            if (getUpdateNotificationsSetting(context)) {
+                                Timber.tag("UpdateCheck").d("Posting update notification for $latestVersion")
+                                UpdateNotificationHelper.showUpdateNotification(context, latestVersion)
+                            }
+                            updateDialogData = UpdateDialogData(
+                                version = latestVersion,
+                                changelog = changelog,
+                                size = size,
+                                date = date,
+                                apkUrl = apkUrl
+                            )
                         }
                     },
                     onError = {
@@ -772,7 +785,14 @@ class MainActivity : ComponentActivity() {
         vivimusicTheme(
             darkTheme = useDarkTheme,
             pureBlack = pureBlack,
-            themeColor = themeColor,
+            // Always use the user's selected static theme color here, never the
+            // per-song extracted color. Putting `themeColor` here caused
+            // rememberDynamicColorScheme + ColorScheme.accentText to rewrite 10+
+            // MaterialTheme slots on every track change, recomposing the entire UI
+            // tree (Home, Library, Settings, …). The dynamic per-song palette is
+            // injected below via LocalDynamicPlayerThemeColor, scoped only to the
+            // BottomSheetPlayer — completely isolating it from the rest of the app.
+            themeColor = selectedThemeColor,
         ) {
             val (appBackgroundColorInt) = rememberPreference(AppBackgroundColorKey, defaultValue = 0)
             BoxWithConstraints(
@@ -1138,6 +1158,13 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(inSearchScreen) {
                     if (!inSearchScreen) searchKeyboardActive = false
                 }
+                LaunchedEffect(currentRoute) {
+                    val route = currentRoute
+                    if (searchOverlayOpen && route != null && route !in topLevelScreens && route != Screens.Search.route && route != "search_input" && !route.startsWith("search/")) {
+                        searchOverlayOpen = false
+                        searchKeyboardActive = false
+                    }
+                }
                 // The floating nav bar keeps Settings as one of its own tabs (see
                 // floatingNavigationItems above), so it should stay visible there too â€”
                 // only the classic nav bar treats Settings as a top-bar-only destination.
@@ -1265,7 +1292,8 @@ class MainActivity : ComponentActivity() {
 
                 val topAppBarScrollBehavior = appBarScrollBehavior(
                     canScroll = {
-                        !inSearchScreen &&
+                        effectiveRoute != Screens.Home.route &&
+                            !inSearchScreen &&
                             (playerBottomSheetState.isCollapsed || playerBottomSheetState.isDismissed)
                     },
                 )
@@ -1675,19 +1703,22 @@ class MainActivity : ComponentActivity() {
                                             // existing ACCOUNT entry) â€” the top bar now
                                             // shows only the wordmark and this settings/
                                             // profile pill, per the simplified-chrome pass.
-                                             IconButton(onClick = {
-                                                  if (enableSettingsPopup) {
-                                                      showSettingDialoge = true
-                                                  } else {
-                                                      navController.navigate(Screens.Settings.route) {
-                                                          popUpTo(navController.graph.startDestinationId) {
-                                                              saveState = true
+                                             IconButton(
+                                                  onClick = {
+                                                      if (enableSettingsPopup) {
+                                                          showSettingDialoge = true
+                                                      } else {
+                                                          navController.navigate(Screens.Settings.route) {
+                                                              popUpTo(navController.graph.startDestinationId) {
+                                                                  saveState = true
+                                                              }
+                                                              launchSingleTop = true
+                                                              restoreState = true
                                                           }
-                                                          launchSingleTop = true
-                                                          restoreState = true
                                                       }
-                                                  }
-                                              }) {
+                                                  },
+                                                  enabled = if (effectiveRoute == Screens.Home.route) chromeAlpha > 0.1f else true
+                                              ) {
                                                 BadgedBox(badge = {}) {
                                                     if (accountImageUrl != null) {
                                                         AsyncImage(
@@ -1728,6 +1759,9 @@ class MainActivity : ComponentActivity() {
                                             navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                                         ),
                                         modifier = Modifier
+                                            .graphicsLayer {
+                                                alpha = if (effectiveRoute == Screens.Home.route) chromeAlpha else 1f
+                                            }
                                             .windowInsetsPadding(
                                                 cutoutInsets.only(WindowInsetsSides.Start + WindowInsetsSides.End)
                                             )
@@ -1743,7 +1777,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         bottomBar = {
-                            val onNavItemClick: (Screens, Boolean) -> Unit = remember(navController, coroutineScope, topAppBarScrollBehavior, playerBottomSheetState, enterSearch) {
+                            val onNavItemClick: (Screens, Boolean) -> Unit = remember(navController, coroutineScope, topAppBarScrollBehavior, playerBottomSheetState, enterSearch, navTransitionFreeze) {
                                 var lastNavRoute: String? = null
                                 var lastNavTimeMs = 0L
                                 { screen: Screens, isSelected: Boolean ->
@@ -1768,7 +1802,7 @@ class MainActivity : ComponentActivity() {
                                         // The debounce below only suppresses a genuine duplicate
                                         // fire for a tab we are still sitting on. Once the user
                                         // has moved anywhere else (tapped a song, opened an
-                                        // artist), the remembered route is stale â€” leaving it set
+                                        // artist), the remembered route is stale — leaving it set
                                         // meant a tab tap within the debounce window was silently
                                         // swallowed and you stayed on the previous screen, which
                                         // is why Home sometimes did nothing.
@@ -1783,6 +1817,7 @@ class MainActivity : ComponentActivity() {
                                         if (screen.route != lastNavRoute || now - lastNavTimeMs >= NavDebounceMs) {
                                             lastNavRoute = screen.route
                                             lastNavTimeMs = now
+                                            navTransitionFreeze.markTransitionStarted()
                                             // Plain navigate() with the standard multi-back-stack
                                             // pattern, same as every other route.
                                             navController.navigate(screen.route) {
@@ -1841,11 +1876,18 @@ class MainActivity : ComponentActivity() {
                                         // recomposing per frame.
                                         modifier = Modifier.zIndex(if (playerAboveBars) 1f else 0f),
                                     ) {
-                                        BottomSheetPlayer(
-                                            state = playerBottomSheetState,
-                                            navController = navController,
-                                            pureBlack = pureBlack
-                                        )
+                                        // Scope the dynamic per-song palette to the player
+                                        // only. Screens outside (Home, Library, Settings)
+                                        // are isolated from per-track recomposition.
+                                        CompositionLocalProvider(
+                                            LocalDynamicPlayerThemeColor provides themeColor
+                                        ) {
+                                            BottomSheetPlayer(
+                                                state = playerBottomSheetState,
+                                                navController = navController,
+                                                pureBlack = pureBlack
+                                            )
+                                        }
                                     }
 
                                     // Use graphicsLayer instead of offset to avoid recomposition
@@ -1920,11 +1962,16 @@ class MainActivity : ComponentActivity() {
                                 }
                             } else {
                                 if (currentRoute != "wrapped" && currentRoute != "update" && currentRoute != "listen_together/chat" && currentRoute != "ambient_mode") {
-                                    BottomSheetPlayer(
-                                        state = playerBottomSheetState,
-                                        navController = navController,
-                                        pureBlack = pureBlack
-                                    )
+                                    // Same isolation as the floating-bar branch above.
+                                    CompositionLocalProvider(
+                                        LocalDynamicPlayerThemeColor provides themeColor
+                                    ) {
+                                        BottomSheetPlayer(
+                                            state = playerBottomSheetState,
+                                            navController = navController,
+                                            pureBlack = pureBlack
+                                        )
+                                    }
                                 }
 
                                 Box(
@@ -2457,12 +2504,24 @@ class MainActivity : ComponentActivity() {
                             homeViewModel = homeViewModel
                         )
                     }
+
+                    updateDialogData?.let { dialogData ->
+                        InAppUpdateDialog(
+                            data = dialogData,
+                            onDismissRequest = { updateDialogData = null }
+                        )
+                    }
                 }
             }
         }
     }
 
     private fun handleDeepLinkIntent(intent: Intent, navController: NavHostController) {
+        if (intent.getBooleanExtra("open_updater", false)) {
+            intent.removeExtra("open_updater")
+            navController.navigate("update")
+            return
+        }
         val uri = intent.data ?: intent.extras?.getString(Intent.EXTRA_TEXT)?.toUri() ?: return
         intent.data = null
         intent.removeExtra(Intent.EXTRA_TEXT)
