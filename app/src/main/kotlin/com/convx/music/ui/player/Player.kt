@@ -1037,7 +1037,7 @@ fun BottomSheetPlayer(
     LaunchedEffect(isPlaying, isCasting, state.isCollapsed) {
         if (!isCasting && isPlaying && !state.isCollapsed) {
             while (isActive) {
-                delay(100) // Update for smooth progress bar while player is open
+                delay(200) // Update for smooth progress bar while player is open (5 fps saves CPU/battery)
                 if (sliderPosition == null) { // Only update if user isn't dragging
                     position = playerConnection.player.currentPosition
                     duration = playerConnection.player.duration
@@ -3669,7 +3669,7 @@ private fun BackgroundVideoView(
             .setTrackSelector(trackSelector)
             .setLoadControl(
                 DefaultLoadControl.Builder()
-                    .setTargetBufferBytes(20 * 1024 * 1024) // 20MB buffer for 4K
+                    .setTargetBufferBytes(5 * 1024 * 1024) // 5MB buffer for video canvas loop (saves ~15MB RAM)
                     .build()
             )
             .build().apply {

@@ -298,9 +298,10 @@ class App : Application(), SingletonImageLoader.Factory {
                 add(SvgDecoder.Factory())
             }
             // Memory cache for fast image loading (prevents network requests on recomposition)
+            // Optimized to 10% heap (~15-25MB on mid-range devices like Galaxy A23 5G) to keep RAM usage low
             memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.35)
+                    .maxSizePercent(context, 0.10)
                     .build()
             }
             if (cacheSize == 0) {
@@ -322,6 +323,18 @@ class App : Application(), SingletonImageLoader.Factory {
                 )
             }
         }.build()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_BACKGROUND) {
+            SingletonImageLoader.get(this).memoryCache?.clear()
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        SingletonImageLoader.get(this).memoryCache?.clear()
     }
 
     companion object {

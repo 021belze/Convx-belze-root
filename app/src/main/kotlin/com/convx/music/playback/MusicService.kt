@@ -1184,11 +1184,12 @@ class MusicService :
             .setLoadControl(
                 androidx.media3.exoplayer.DefaultLoadControl.Builder()
                     .setBufferDurationsMs(
-                        50_000,   // Min buffer: 50s
-                        50_000,   // Max buffer: 50s
-                        750,      // Buffer for playback: 750ms â€” start audio as soon as we have it
-                        2_000     // Buffer for playback after re-buffer: 2s
+                        15_000,   // Min buffer: 15s (was 50s)
+                        30_000,   // Max buffer: 30s (was 50s)
+                        750,      // Buffer for playback: 750ms — start audio as soon as we have it
+                        1_500     // Buffer for playback after re-buffer: 1.5s
                     )
+                    .setPrioritizeTimeOverSizeThresholds(true)
                     .build()
             )
             .setHandleAudioBecomingNoisy(true)

@@ -267,7 +267,7 @@ fun PlayerV2(
                 val rawDuration = playerConnection.player.duration
                 position = playerConnection.player.currentPosition.coerceAtLeast(0L)
                 duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
-                delay(if (isPlaying) 50 else 500)
+                delay(if (isPlaying) 200 else 500)
             }
         }
     }

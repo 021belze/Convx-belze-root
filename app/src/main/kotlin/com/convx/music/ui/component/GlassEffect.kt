@@ -193,7 +193,7 @@ internal const val PLAYER_BLUR_MULTIPLIER = 4f
  *
  * Keep the ramp in [glassResolutionScale] rather than a flat value.
  */
-internal const val MIN_GLASS_RESOLUTION_SCALE = 0.30f
+internal const val MIN_GLASS_RESOLUTION_SCALE = 0.25f
 
 /** Blur radius (dp) at or above which the minimum resolution scale is safe to use. */
 internal const val FULL_QUALITY_BLUR_DP = 8f
