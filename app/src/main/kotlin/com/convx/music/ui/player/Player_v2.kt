@@ -698,9 +698,11 @@ fun PlayerV2(
                                             modifier = Modifier.fillMaxSize()
                                         )
                                     } else {
+                                        val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
                                         val queueSheetState = rememberBottomSheetState(
-                                            dismissedBound = 0.dp,
-                                            expandedBound = LocalConfiguration.current.screenHeightDp.dp,
+                                            dismissedBound = screenHeightDp,
+                                            expandedBound = screenHeightDp,
+                                            collapsedBound = screenHeightDp,
                                             initialAnchor = expandedAnchor,
                                         )
                                         Queue(
@@ -1100,9 +1102,11 @@ fun PlayerV2(
                                 }
                             }
                             PlayerInternalState.QUEUE -> {
+                                val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
                                 val queueSheetState = rememberBottomSheetState(
-                                    dismissedBound = 0.dp,
-                                    expandedBound = LocalConfiguration.current.screenHeightDp.dp,
+                                    dismissedBound = screenHeightDp,
+                                    expandedBound = screenHeightDp,
+                                    collapsedBound = screenHeightDp,
                                     initialAnchor = expandedAnchor,
                                 )
                                 Queue(

@@ -37,6 +37,10 @@ private val miniContainerRect = mutableStateOf<Rect?>(null)
 
 internal val miniPlayerContainerRect: Rect? get() = miniContainerRect.value
 
+internal fun clearContainerMorphRects() {
+    miniContainerRect.value = null
+}
+
 /**
  * Call on the mini player's outermost pill box. Purely observational: it records the
  * pill's bounds and changes nothing about how the pill renders.
@@ -95,7 +99,9 @@ fun PlayerContainerMorphOverlay(
                     if (mini.width <= 0f || mini.height <= 0f) return@onDrawBehind
                     val miniLayer = PlayerMorph.miniLayer ?: return@onDrawBehind
                     val fullLayer = PlayerMorph.fullLayer ?: return@onDrawBehind
-                    if (fullLayer.size.width <= 0) return@onDrawBehind
+                    if (fullLayer.size.width <= 0 || fullLayer.size.height <= 0) return@onDrawBehind
+                    // Morph is portrait-only: skip in landscape
+                    if (fullLayer.size.width > fullLayer.size.height) return@onDrawBehind
 
                     // The full player is the recorded screen itself, so its rect IS this
                     // overlay's own size. Nothing to register at that end, nothing to go
@@ -129,6 +135,7 @@ fun PlayerContainerMorphOverlay(
                                 drawLayer(miniLayer)
                             }
                             val scale = rect.width / fullLayer.size.width.toFloat()
+                            if (scale < 0.01f || scale > 1.5f) return@onDrawBehind
                             fullLayer.alpha = playerSheetPageAlpha(fraction)
                             scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero) {
                                 drawLayer(fullLayer)

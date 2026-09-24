@@ -44,6 +44,14 @@ import coil3.size.Size as CoilSize
 private val miniArtworkRect = mutableStateOf<Rect?>(null)
 private val fullArtworkRect = mutableStateOf<Rect?>(null)
 
+internal val currentMiniArtworkRect: Rect? get() = miniArtworkRect.value
+internal val currentFullArtworkRect: Rect? get() = fullArtworkRect.value
+
+internal fun clearArtworkMorphRects() {
+    miniArtworkRect.value = null
+    fullArtworkRect.value = null
+}
+
 /**
  * Call on the mini player's own artwork box. Purely observational: records where the
  * artwork is on screen and changes nothing about how the mini player itself renders.
@@ -123,6 +131,8 @@ fun PlayerArtworkMorphOverlay(
     // measured a crash on a Samsung device: coil3.size.Dimension throws on any px
     // <= 0, and full.width/height fed CoilSize directly with no floor.
     if (mini.width <= 0f || mini.height <= 0f || full.width <= 0f || full.height <= 0f) return
+    // Morph is portrait-only: skip in landscape
+    if (full.width > full.height) return
 
     val density = LocalDensity.current
     val boxWidthDp = with(density) { full.width.toDp() }
@@ -150,6 +160,10 @@ fun PlayerArtworkMorphOverlay(
                 translationY = rect.top - full.top
                 val artworkScaleX = rect.width / full.width.coerceAtLeast(1f)
                 val artworkScaleY = rect.height / full.height.coerceAtLeast(1f)
+                if (artworkScaleX < 0.01f || artworkScaleX > 1.5f || artworkScaleY < 0.01f || artworkScaleY > 1.5f) {
+                    alpha = 0f
+                    return@graphicsLayer
+                }
                 scaleX = artworkScaleX
                 scaleY = artworkScaleY
                 val radius = androidx.compose.ui.util.lerp(

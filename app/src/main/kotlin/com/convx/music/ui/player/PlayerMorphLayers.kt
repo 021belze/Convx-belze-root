@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 object PlayerMorph {
     @JvmField var miniLayer: GraphicsLayer? = null
     @JvmField var fullLayer: GraphicsLayer? = null
+    @JvmField var hasRecordedOnce: Boolean = false
 
     /** Set by the player; the sheet's own 0..1 drag/settle progress. */
     @JvmField var progressProvider: () -> Float = { 0f }
@@ -62,12 +63,20 @@ object PlayerMorph {
         get() {
             val fraction = progress
             if (fraction <= 0f || fraction >= 1f) return false
+            if (!hasRecordedOnce) return false
             val miniL = miniLayer ?: return false
             val fullL = fullLayer ?: return false
             if (miniL.size.width <= 0 || miniL.size.height <= 0) return false
             if (fullL.size.width <= 0 || fullL.size.height <= 0) return false
+            // Morph is portrait-only: in landscape, full player width > height
+            if (fullL.size.width > fullL.size.height) return false
             val mini = miniPlayerContainerRect ?: return false
-            return mini.width > 0f && mini.height > 0f
+            if (mini.width <= 0f || mini.height <= 0f) return false
+            val miniArt = currentMiniArtworkRect ?: return false
+            val fullArt = currentFullArtworkRect ?: return false
+            if (miniArt.width <= 0f || miniArt.height <= 0f) return false
+            if (fullArt.width <= 0f || fullArt.height <= 0f) return false
+            return true
         }
 
     val fullPlayerRect: Rect?
@@ -93,6 +102,9 @@ fun InstallPlayerMorphLayers() {
         onDispose {
             PlayerMorph.miniLayer = null
             PlayerMorph.fullLayer = null
+            PlayerMorph.hasRecordedOnce = false
+            clearArtworkMorphRects()
+            clearContainerMorphRects()
         }
     }
 }
@@ -115,6 +127,7 @@ fun Modifier.recordPlayerLayer(
         return@drawWithContent
     }
     target.record { this@drawWithContent.drawContent() }
+    PlayerMorph.hasRecordedOnce = true
     if (drawInPlace()) {
         target.alpha = 1f
         drawLayer(target)

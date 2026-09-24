@@ -441,8 +441,8 @@ class BottomSheetState(
             }
         } else {
             val l0 = dismissedBound
-            val l1 = (collapsedBound - dismissedBound) / 2
-            val l2 = (expandedBound - collapsedBound) / 2
+            val l1 = dismissedBound + (collapsedBound - dismissedBound) / 2
+            val l2 = collapsedBound + (expandedBound - collapsedBound) / 2
             val l3 = expandedBound
 
             when (value) {
@@ -467,6 +467,12 @@ class BottomSheetState(
             var isTopReached = false
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // If the sheet was partially dragged down, dragging up must pull the sheet back up
+                if (value < expandedBound && available.y < 0) {
+                    dispatchRawDelta(available.y)
+                    return available
+                }
+
                 if (isExpanded && available.y < 0) {
                     isTopReached = false
                 }
@@ -484,25 +490,21 @@ class BottomSheetState(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                if (isExpanded && available.y < 0) {
+                // Only respond to direct user drags (not fling momentum overscroll)
+                if (source == NestedScrollSource.UserInput && available.y > 0) {
                     isTopReached = true
+                    if (value > collapsedBound) {
+                        dispatchRawDelta(available.y)
+                        return available
+                    }
                 }
 
-                return if (isExpanded && available.y > 0) {
-                    isTopReached = true
-                    dispatchRawDelta(available.y)
-                    available
-                } else {
-                    Offset.Zero
-                }
+                return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                return if (isExpanded && available.y < 0 && isTopReached) {
-                    coroutineScope.launch {
-                        performFling(available.y, null)
-                    }
-
+                return if (value < expandedBound && available.y < 0) {
+                    performFling(-available.y, null)
                     available
                 } else {
                     Velocity.Zero
@@ -512,6 +514,9 @@ class BottomSheetState(
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 isTopReached = false
                 dragClockNs[0] = 0L
+                if (value < expandedBound) {
+                    performFling(-available.y, null)
+                }
                 return Velocity.Zero
             }
         }
@@ -545,7 +550,10 @@ fun rememberBottomSheetState(
     }
 
     return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope) {
-        animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), null)
+        animatable.updateBounds(
+            dismissedBound.coerceAtMost(expandedBound),
+            expandedBound.coerceAtLeast(dismissedBound)
+        )
         coroutineScope.launch {
             if (animatable.value != initialValue) {
                 animatable.animateTo(initialValue, BottomSheetAnimationSpec)
@@ -555,7 +563,8 @@ fun rememberBottomSheetState(
         BottomSheetState(
             draggableState = DraggableState { delta ->
                 coroutineScope.launch {
-                    animatable.snapTo(animatable.value - with(density) { delta.toDp() })
+                    val targetValue = animatable.value - with(density) { delta.toDp() }
+                    animatable.snapTo(targetValue.coerceIn(dismissedBound, expandedBound))
                 }
             },
             onAnchorChanged = { previousAnchor = it },
