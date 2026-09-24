@@ -153,7 +153,14 @@ android {
             isShrinkResources = true
             isCrunchPngs = false
             isDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
+            // On CI the release keystore is decoded; use it so every beta build
+            // carries the same stable signature. Falls back to the local debug
+            // keystore for developer machines where the release keystore is absent.
+            signingConfig = if (file("keystore/release.keystore").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

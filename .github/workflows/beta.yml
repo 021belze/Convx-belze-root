@@ -48,10 +48,20 @@ jobs:
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE }}
+        run: |
+          mkdir -p app/keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > app/keystore/release.keystore
+
       - name: Build Universal GMS Beta APK
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           ./gradlew assembleUniversalGmsDebug -Pnightly=true -PnightlyRun=${{ github.run_number }} --no-configuration-cache --console=plain --warning-mode summary -x lint
 
