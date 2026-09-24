@@ -813,8 +813,9 @@ suspend fun checkForUpdate(
                 changelogList.add(ChangelogSection(context.getString(R.string.changelog), listOf(subjectLine)))
                 
                 val formattedReleaseDate = formatGitHubDate(runUpdatedAt)
-                val apkDownloadUrl = "https://nightly.link/$GITHUB_REPO/workflows/$betaWorkflowFile/$betaBranchName/$betaArtifactName.zip"
-                val apkSize = fetchNightlyArtifactSize(betaRunObject.getLong("id"))
+                val runId = betaRunObject.getLong("id")
+                val apkDownloadUrl = "https://nightly.link/$GITHUB_REPO/actions/runs/$runId/$betaArtifactName.zip"
+                val apkSize = fetchNightlyArtifactSize(runId)
 
                 withContext(Dispatchers.Main) {
                     onSuccess(
