@@ -747,46 +747,86 @@ suspend fun checkForUpdate(
             val currentVersion = BuildConfig.VERSION_NAME
             val betaEnabled = getBetaUpdatesSetting(context)
 
-            var isNightlyUpdate = false
-            var nightlyRunObject: JSONObject? = null
+            var isBetaWorkflowUpdate = false
+            var betaRunObject: JSONObject? = null
+            var betaWorkflowFile = "beta.yml"
+            var betaArtifactName = "convx-gms-beta"
+            var betaBranchName = "beta"
 
             if (betaEnabled) {
+                // 1. Check beta branch workflow runs first (from .github/workflows/beta.yml)
                 try {
-                    val nightlyUrl = URL("https://api.github.com/repos/$GITHUB_REPO/actions/workflows/nightly.yml/runs?status=success&per_page=1")
-                    val nightlyJson = nightlyUrl.openStream().bufferedReader().use { it.readText() }
-                    val nightlyData = JSONObject(nightlyJson)
-                    val runs = nightlyData.optJSONArray("workflow_runs")
+                    val betaUrl = URL("https://api.github.com/repos/$GITHUB_REPO/actions/workflows/beta.yml/runs?status=success&per_page=1")
+                    val betaJson = betaUrl.openStream().bufferedReader().use { it.readText() }
+                    val betaData = JSONObject(betaJson)
+                    val runs = betaData.optJSONArray("workflow_runs")
                     if (runs != null && runs.length() > 0) {
                         val firstRun = runs.getJSONObject(0)
                         val runNumber = firstRun.getInt("run_number")
 
                         if (runNumber > BuildConfig.NIGHTLY_RUN) {
-                            isNightlyUpdate = true
-                            nightlyRunObject = firstRun
+                            isBetaWorkflowUpdate = true
+                            betaRunObject = firstRun
+                            betaWorkflowFile = "beta.yml"
+                            betaArtifactName = "convx-gms-beta"
+                            betaBranchName = "beta"
                         }
                     }
                 } catch (e: Exception) {
-                    Timber.tag("UpdateCheck").e(e, "Error checking nightly updates: ${e.message}")
+                    Timber.tag("UpdateCheck").d("No beta.yml runs found or error: ${e.message}")
+                }
+
+                // 2. Fallback to nightly.yml workflow if no beta.yml update found
+                if (!isBetaWorkflowUpdate) {
+                    try {
+                        val nightlyUrl = URL("https://api.github.com/repos/$GITHUB_REPO/actions/workflows/nightly.yml/runs?status=success&per_page=1")
+                        val nightlyJson = nightlyUrl.openStream().bufferedReader().use { it.readText() }
+                        val nightlyData = JSONObject(nightlyJson)
+                        val runs = nightlyData.optJSONArray("workflow_runs")
+                        if (runs != null && runs.length() > 0) {
+                            val firstRun = runs.getJSONObject(0)
+                            val runNumber = firstRun.getInt("run_number")
+
+                            if (runNumber > BuildConfig.NIGHTLY_RUN) {
+                                isBetaWorkflowUpdate = true
+                                betaRunObject = firstRun
+                                betaWorkflowFile = "nightly.yml"
+                                betaArtifactName = "convx-gms-nightly"
+                                betaBranchName = "main"
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Timber.tag("UpdateCheck").e(e, "Error checking nightly updates: ${e.message}")
+                    }
                 }
             }
 
-            if (isNightlyUpdate && nightlyRunObject != null) {
-                val runNumber = nightlyRunObject.getInt("run_number")
-                val runUpdatedAt = nightlyRunObject.getString("updated_at")
-                val displayTag = "nightly-r$runNumber"
+            if (isBetaWorkflowUpdate && betaRunObject != null) {
+                val runNumber = betaRunObject.getInt("run_number")
+                val runUpdatedAt = betaRunObject.getString("updated_at")
+                val displayTag = if (betaWorkflowFile == "beta.yml") "beta-r$runNumber" else "nightly-r$runNumber"
                 
                 val changelogList = mutableListOf<ChangelogSection>()
-                val headCommit = nightlyRunObject.optJSONObject("head_commit")
+                val headCommit = betaRunObject.optJSONObject("head_commit")
                 val commitMessage = headCommit?.optString("message") ?: "New features and bug fixes"
                 val subjectLine = commitMessage.lineSequence().firstOrNull { it.isNotBlank() } ?: commitMessage
                 changelogList.add(ChangelogSection(context.getString(R.string.changelog), listOf(subjectLine)))
                 
                 val formattedReleaseDate = formatGitHubDate(runUpdatedAt)
-                val apkDownloadUrl = "https://nightly.link/$GITHUB_REPO/workflows/nightly.yml/main/convx-gms-nightly.zip"
-                val apkSize = fetchNightlyArtifactSize(nightlyRunObject.getLong("id"))
+                val apkDownloadUrl = "https://nightly.link/$GITHUB_REPO/workflows/$betaWorkflowFile/$betaBranchName/$betaArtifactName.zip"
+                val apkSize = fetchNightlyArtifactSize(betaRunObject.getLong("id"))
 
                 withContext(Dispatchers.Main) {
-                    onSuccess(displayTag, true, changelogList, apkSize, formattedReleaseDate, "Bleeding-edge nightly build from main branch.", null, apkDownloadUrl)
+                    onSuccess(
+                        displayTag,
+                        true,
+                        changelogList,
+                        apkSize,
+                        formattedReleaseDate,
+                        if (betaWorkflowFile == "beta.yml") "Beta test build from beta branch (r$runNumber)." else "Bleeding-edge nightly build from main branch.",
+                        null,
+                        apkDownloadUrl
+                    )
                 }
                 return@withContext
             }
@@ -797,7 +837,12 @@ suspend fun checkForUpdate(
             for (i in 0 until releases.length()) {
                 val release = releases.getJSONObject(i)
                 val tagName = release.getString("tag_name")
-                val isBeta = tagName.startsWith("b", ignoreCase = true)
+                val isPrerelease = release.optBoolean("prerelease", false)
+                val targetBranch = release.optString("target_commitish", "")
+                val isBeta = isPrerelease ||
+                        targetBranch.equals("beta", ignoreCase = true) ||
+                        tagName.startsWith("b", ignoreCase = true) ||
+                        tagName.contains("beta", ignoreCase = true)
                 
                 // Track best stable
                 if (!isBeta) {
