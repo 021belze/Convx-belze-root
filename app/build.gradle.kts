@@ -111,7 +111,8 @@ android {
             keyPassword = "android"
         }
         create("release") {
-            // Signing material comes from the environment only. Never hardcode a
+            // Default to empty strings so Gradle configuration does not blow up
+            // when environment variables are missing on non-release runs. No
             // fallback password here: this file is published, the keystore is not,
             // and a leaked release password plus a leaked keystore is an
             // unrecoverable compromise of the app's signing identity.
@@ -126,7 +127,11 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
             storePassword = "android"
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storeFile = if (file("persistent-debug.keystore").exists()) {
+                file("persistent-debug.keystore")
+            } else {
+                file("${System.getProperty("user.home")}/.android/debug.keystore")
+            }
         }
     }
 
@@ -138,6 +143,8 @@ android {
             isDebuggable = false
             if (file("keystore/release.keystore").exists()) {
                 signingConfig = signingConfigs.getByName("release")
+            } else if (file("persistent-debug.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("persistentDebug")
             } else {
                 signingConfig = signingConfigs.getByName("debug")
             }
@@ -148,15 +155,13 @@ android {
             buildConfigField("String", "ARCHITECTURE", "\"release\"")
         }
         debug {
+            applicationIdSuffix = ".debug"
             isMinifyEnabled = true
             isShrinkResources = true
             isCrunchPngs = false
             isDebuggable = false
-            // On CI the release keystore is decoded; use it so every beta build
-            // carries the same stable signature. Falls back to the local debug
-            // keystore for developer machines where the release keystore is absent.
-            signingConfig = if (file("keystore/release.keystore").exists()) {
-                signingConfigs.getByName("release")
+            signingConfig = if (file("persistent-debug.keystore").exists()) {
+                signingConfigs.getByName("persistentDebug")
             } else {
                 signingConfigs.getByName("debug")
             }

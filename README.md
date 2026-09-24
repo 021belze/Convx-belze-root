@@ -19,7 +19,7 @@
     <img src="https://img.shields.io/badge/Based%20on-Convx%20r84-8A2BE2?style=flat-square" alt="Based on Convx r84">
     <img src="https://img.shields.io/badge/Build-R8%20Optimized-FF6B35?style=flat-square" alt="R8 Optimized">
     <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 8.0+">
-    <img src="https://img.shields.io/badge/Package-com.convx.music-blueviolet?style=flat-square" alt="Package ID">
+    <img src="https://img.shields.io/badge/Side%20by%20Side-com.convx.music.debug-blueviolet?style=flat-square" alt="Side by Side Install">
   </p>
 
 </div>
@@ -28,7 +28,7 @@
 
 ## 🔱 Tentang Fork Ini
 
-**Convx by Belze** adalah fork pribadi dari [Convx](https://github.com/cosmictaserdev-creator/Convx) yang difokuskan pada optimasi performa, perbaikan bug, dan peningkatan animasi.
+**Convx by Belze** adalah fork pribadi dari [Convx](https://github.com/cosmictaserdev-creator/Convx) yang difokuskan pada optimasi performa, perbaikan bug, dan peningkatan animasi. Fork ini bukan pengganti resmi — melainkan versi eksperimental yang berjalan **berdampingan** (`com.convx.music.debug`) dengan Convx resmi.
 
 > Semua kredit desain dan arsitektur tetap menjadi milik developer asli, [Aryan (CosmicTaser)](https://github.com/cosmictaserdev-creator) dan kontributor Convx.
 
@@ -63,7 +63,7 @@
 
 ## 📦 Download & Install
 
-> Package ID: `com.convx.music`. Mendukung update langsung di dalam aplikasi (in-app update), baik jalur Beta maupun Official Release.
+> **Berjalan berdampingan dengan Convx resmi!** Package ID fork ini adalah `com.convx.music.debug`, sehingga tidak akan menimpa aplikasi Convx asli yang sudah terpasang. Mendukung update langsung di dalam aplikasi (in-app update), baik jalur Beta maupun Official Release.
 
 1. Buka halaman [**Releases**](https://github.com/021belze/Convx-belze-root/releases/latest)
 2. Download file `.apk` sesuai perangkat
