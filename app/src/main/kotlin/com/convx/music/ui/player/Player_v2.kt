@@ -698,15 +698,7 @@ fun PlayerV2(
                                             modifier = Modifier.fillMaxSize()
                                         )
                                     } else {
-                                        val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
-                                        val queueSheetState = rememberBottomSheetState(
-                                            dismissedBound = screenHeightDp,
-                                            expandedBound = screenHeightDp,
-                                            collapsedBound = screenHeightDp,
-                                            initialAnchor = expandedAnchor,
-                                        )
-                                        Queue(
-                                            state = queueSheetState,
+                                        QueuePage(
                                             playerBottomSheetState = state,
                                             navController = navController,
                                             background = Color.Transparent,
@@ -1102,15 +1094,7 @@ fun PlayerV2(
                                 }
                             }
                             PlayerInternalState.QUEUE -> {
-                                val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
-                                val queueSheetState = rememberBottomSheetState(
-                                    dismissedBound = screenHeightDp,
-                                    expandedBound = screenHeightDp,
-                                    collapsedBound = screenHeightDp,
-                                    initialAnchor = expandedAnchor,
-                                )
-                                Queue(
-                                    state = queueSheetState,
+                                QueuePage(
                                     playerBottomSheetState = state,
                                     navController = navController,
                                     background = Color.Transparent,

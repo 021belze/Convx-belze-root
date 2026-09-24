@@ -25,6 +25,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +45,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -172,8 +174,43 @@ import kotlin.math.roundToInt
 @SuppressLint("UnrememberedMutableState")
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
+fun QueuePage(
+    playerBottomSheetState: BottomSheetState,
+    navController: NavController,
+    modifier: Modifier = Modifier,
+    background: Color = Color.Transparent,
+    onBackgroundColor: Color,
+    TextBackgroundColor: Color,
+    textButtonColor: Color,
+    iconButtonColor: Color,
+    pureBlack: Boolean = false,
+    showInlineLyrics: Boolean = false,
+    playerBackground: PlayerBackgroundStyle = PlayerBackgroundStyle.DEFAULT,
+    onToggleLyrics: () -> Unit = {},
+) {
+    Queue(
+        state = null,
+        playerBottomSheetState = playerBottomSheetState,
+        navController = navController,
+        modifier = modifier,
+        background = background,
+        onBackgroundColor = onBackgroundColor,
+        TextBackgroundColor = TextBackgroundColor,
+        textButtonColor = textButtonColor,
+        iconButtonColor = iconButtonColor,
+        pureBlack = pureBlack,
+        showInlineLyrics = showInlineLyrics,
+        playerBackground = playerBackground,
+        onToggleLyrics = onToggleLyrics,
+        isSheet = false,
+    )
+}
+
+@SuppressLint("UnrememberedMutableState")
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
 fun Queue(
-    state: BottomSheetState,
+    state: BottomSheetState? = null,
     playerBottomSheetState: BottomSheetState,
     navController: NavController,
     modifier: Modifier = Modifier,
@@ -186,6 +223,7 @@ fun Queue(
     showInlineLyrics: Boolean,
     playerBackground: PlayerBackgroundStyle = PlayerBackgroundStyle.DEFAULT,
     onToggleLyrics: () -> Unit = {},
+    isSheet: Boolean = state != null,
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -322,9 +360,10 @@ fun Queue(
         }
     }
 
-    BottomSheet(
-        state = state,
-        modifier = modifier,
+    if (isSheet && state != null) {
+        BottomSheet(
+            state = state,
+            modifier = modifier,
         background = {
             Box(Modifier.fillMaxSize().background(Color.Unspecified))
         },
@@ -359,7 +398,7 @@ fun Queue(
 
                     PlayerQueueButton(
                         icon = R.drawable.queue_music,
-                        onClick = { state.expandSoft() },
+                        onClick = { state?.expandSoft() },
                         isActive = false,
                         shape = queueShape,
                         modifier = Modifier.size(buttonSize),
@@ -518,7 +557,7 @@ fun Queue(
                     // as the middle pair reading visibly off-center.
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     TextButton(
-                        onClick = { state.expandSoft() },
+                        onClick = { state?.expandSoft() },
                         modifier = Modifier.wrapContentWidth()
                     ) {
                         Row(
@@ -715,7 +754,121 @@ fun Queue(
             }
         },
     ) {
-        val queueTitle by playerConnection.queueTitle.collectAsState()
+        QueueMainContent(
+            lazyListState = lazyListState,
+            state = state,
+            playerBottomSheetState = playerBottomSheetState,
+            navController = navController,
+            background = background,
+            onBackgroundColor = onBackgroundColor,
+            TextBackgroundColor = TextBackgroundColor,
+            textButtonColor = textButtonColor,
+            iconButtonColor = iconButtonColor,
+            pureBlack = pureBlack,
+            showInlineLyrics = showInlineLyrics,
+            playerBackground = playerBackground,
+            onToggleLyrics = onToggleLyrics,
+            isSheet = true,
+        )
+    }
+} else {
+    Box(
+        modifier = modifier.fillMaxSize(),
+    ) {
+        QueueMainContent(
+            lazyListState = lazyListState,
+            state = null,
+            playerBottomSheetState = playerBottomSheetState,
+            navController = navController,
+            background = background,
+            onBackgroundColor = onBackgroundColor,
+            TextBackgroundColor = TextBackgroundColor,
+            textButtonColor = textButtonColor,
+            iconButtonColor = iconButtonColor,
+            pureBlack = pureBlack,
+            showInlineLyrics = showInlineLyrics,
+            playerBackground = playerBackground,
+            onToggleLyrics = onToggleLyrics,
+            isSheet = false,
+        )
+    }
+}
+
+    if (showCommentSheet) {
+        CommentSheet(
+            videoId = mediaMetadata?.id ?: "",
+            onDismiss = { showCommentSheet = false }
+        )
+    }
+}
+
+@SuppressLint("UnrememberedMutableState")
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun BoxScope.QueueMainContent(
+    lazyListState: LazyListState,
+    state: BottomSheetState?,
+    playerBottomSheetState: BottomSheetState,
+    navController: NavController,
+    background: Color,
+    onBackgroundColor: Color,
+    TextBackgroundColor: Color,
+    textButtonColor: Color,
+    iconButtonColor: Color,
+    pureBlack: Boolean,
+    showInlineLyrics: Boolean,
+    playerBackground: PlayerBackgroundStyle,
+    onToggleLyrics: () -> Unit,
+    isSheet: Boolean,
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val clipboardManager = LocalClipboard.current
+    val menuState = LocalMenuState.current
+    val bottomSheetPageState = LocalBottomSheetPageState.current
+    val coroutineScope = rememberCoroutineScope()
+    val playerConnection = LocalPlayerConnection.current ?: return
+    val isPlaying by playerConnection.isEffectivelyPlaying.collectAsState()
+    val repeatMode by playerConnection.repeatMode.collectAsState()
+    val currentWindowIndex by playerConnection.currentWindowIndex.collectAsState()
+    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    val currentSong by playerConnection.currentSong.collectAsState(initial = null)
+    val shuffleModeEnabled by playerConnection.shuffleModeEnabled.collectAsState()
+    val currentFormat by playerConnection.currentFormat.collectAsState(initial = null)
+    val listenTogetherManager = LocalListenTogetherManager.current
+    val listenTogetherRoleState = listenTogetherManager?.role?.collectAsState(initial = com.convx.music.listentogether.RoomRole.NONE)
+    val canControlTogether = listenTogetherManager?.canControl?.collectAsState(initial = true)
+    val isListenTogetherGuest = canControlTogether?.value == false
+    val castHandler = remember(playerConnection) {
+        try {
+            playerConnection.service.castConnectionHandler
+        } catch (e: Exception) {
+            null
+        }
+    }
+    val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
+    val castIsPlaying by castHandler?.castIsPlaying?.collectAsState() ?: remember { mutableStateOf(false) }
+
+    var inSelectMode by rememberSaveable { mutableStateOf(false) }
+    val selection = rememberSaveable(
+        saver = listSaver<MutableList<String>, String>(
+            save = { it.toList() },
+            restore = { it.toMutableStateList() }
+        )
+    ) { mutableStateListOf() }
+    val onExitSelectionMode = {
+        inSelectMode = false
+        selection.clear()
+    }
+    if (inSelectMode) {
+        BackHandler(onBack = onExitSelectionMode)
+    }
+
+    var locked by rememberPreference(QueueEditLockKey, defaultValue = true)
+    val snackbarHostState = remember { SnackbarHostState() }
+    var dismissJob: Job? by remember { mutableStateOf(null) }
+
+    val queueTitle by playerConnection.queueTitle.collectAsState()
         val queueWindows by playerConnection.queueWindows.collectAsState()
         val automix by playerConnection.service.automixItems.collectAsState()
         val mutableQueueWindows = remember { mutableStateListOf<Timeline.Window>() }
@@ -813,9 +966,18 @@ fun Queue(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }
                     ) { }
-                    .windowInsetsPadding(
-                        WindowInsets.systemBars
-                            .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                    .then(
+                        if (isSheet) {
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.systemBars
+                                    .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                            )
+                        } else {
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.systemBars
+                                    .only(WindowInsetsSides.Horizontal),
+                            )
+                        }
                     ),
             ) {
                 Row(
@@ -1168,7 +1330,13 @@ fun Queue(
                             ).asPaddingValues(),
                     modifier = Modifier
                         .fillMaxSize()
-                        .nestedScroll(state.preUpPostDownNestedScrollConnection)
+                        .then(
+                            if (isSheet && state != null) {
+                                Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection)
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
                     item(key = "queue_top_spacer") {
                         Spacer(
@@ -1457,15 +1625,7 @@ fun Queue(
                         )
                         .align(Alignment.BottomCenter),
                 )
-            }
         }
-    }
-
-    if (showCommentSheet) {
-        CommentSheet(
-            videoId = mediaMetadata?.id ?: "",
-            onDismiss = { showCommentSheet = false }
-        )
     }
 }
 
