@@ -8,7 +8,7 @@
         <intent
             android:action="com.convx.music.action.SEARCH"
             android:targetClass="com.convx.music.MainActivity"
-            android:targetPackage="com.convx.music.debug" />
+            android:targetPackage="com.convx.music" />
     </shortcut>
     <shortcut
         android:enabled="true"
@@ -18,6 +18,6 @@
         <intent
             android:action="com.convx.music.action.LIBRARY"
             android:targetClass="com.convx.music.MainActivity"
-            android:targetPackage="com.convx.music.debug" />
+            android:targetPackage="com.convx.music" />
     </shortcut>
 </shortcuts>

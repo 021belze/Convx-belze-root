@@ -148,7 +148,6 @@ android {
             buildConfigField("String", "ARCHITECTURE", "\"release\"")
         }
         debug {
-            applicationIdSuffix = ".debug"
             isMinifyEnabled = true
             isShrinkResources = true
             isCrunchPngs = false
