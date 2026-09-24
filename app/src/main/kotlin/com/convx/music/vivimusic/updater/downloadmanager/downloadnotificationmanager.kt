@@ -16,27 +16,48 @@ object DownloadNotificationManager {
     private lateinit var notificationManager: NotificationManager
     private lateinit var appContext: Context
 
-    const val CHANNEL_ID = "download_progress_channel"
-    private const val CHANNEL_NAME = "Download Progress" // Will be replaced with context.getString in initialize()
+    const val CHANNEL_ID = "download_progress_channel_v2"
+    const val CHANNEL_COMPLETE_ID = "download_complete_channel_v2"
     private const val NOTIFICATION_ID = 5678
+    private const val COMPLETE_NOTIFICATION_ID = 5679
 
     fun initialize(context: Context) {
         appContext = context
         notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            // Delete old noisy channel if it exists
+            try {
+                notificationManager.deleteNotificationChannel("download_progress_channel")
+            } catch (e: Exception) {}
+
+            // Progress channel - strictly LOW importance, completely silent, no vibration, no popup
+            val progressChannel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.download_progress_channel),
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = context.getString(R.string.download_progress_description)
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableVibration(false)
+                vibrationPattern = longArrayOf(0)
+                setSound(null, null)
                 enableLights(false)
             }
-            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(progressChannel)
+
+            // Complete channel - DEFAULT importance so user is alerted when download is ready to install
+            val completeChannel = NotificationChannel(
+                CHANNEL_COMPLETE_ID,
+                context.getString(R.string.download_complete_channel),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = context.getString(R.string.download_complete_description)
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            notificationManager.createNotificationChannel(completeChannel)
         }
     }
 
@@ -66,6 +87,7 @@ object DownloadNotificationManager {
      * Show download completed notification
      */
     fun showDownloadComplete(version: String, filePath: String) {
+        cancelNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
             showDownloadCompleteModern(version, filePath)
         } else {
@@ -77,7 +99,8 @@ object DownloadNotificationManager {
      * Show download failed notification
      */
     fun showDownloadFailed(version: String, errorMessage: String) {
-        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+        cancelNotification()
+        val notification = NotificationCompat.Builder(appContext, CHANNEL_COMPLETE_ID)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
             .setContentTitle(appContext.getString(R.string.update_failed))
             .setContentText(appContext.getString(R.string.failed_to_download_version, version))
@@ -90,7 +113,7 @@ object DownloadNotificationManager {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        notificationManager.notify(COMPLETE_NOTIFICATION_ID, notification)
     }
 
     /**
@@ -126,6 +149,7 @@ object DownloadNotificationManager {
             .setContentTitle(appContext.getString(R.string.downloading_update))
             .setContentText(appContext.getString(R.string.version_file_size, version, fileSize))
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setStyle(progressStyle)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setCategory(Notification.CATEGORY_PROGRESS)
@@ -163,6 +187,7 @@ object DownloadNotificationManager {
             .setContentTitle(appContext.getString(R.string.downloading_update))
             .setContentText(appContext.getString(R.string.version_progress, version, progress))
             .setOngoing(progress < 100)
+            .setOnlyAlertOnce(true)
             .setStyle(progressStyle)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setCategory(Notification.CATEGORY_PROGRESS)
@@ -215,7 +240,7 @@ object DownloadNotificationManager {
             }
             .setProgress(100)
 
-        val builder = Notification.Builder(appContext, CHANNEL_ID)
+        val builder = Notification.Builder(appContext, CHANNEL_COMPLETE_ID)
             .setSmallIcon(R.drawable.updated) // Checkmark icon when complete
             .setContentTitle(appContext.getString(R.string.update_ready))
             .setContentText(appContext.getString(R.string.tap_to_install_version, version))
@@ -230,7 +255,7 @@ object DownloadNotificationManager {
         setRequestPromotedOngoingSafely(builder, false)
         setShortCriticalTextSafely(builder, appContext.getString(R.string.done))
 
-        notificationManager.notify(NOTIFICATION_ID, builder.build())
+        notificationManager.notify(COMPLETE_NOTIFICATION_ID, builder.build())
     }
 
     private fun setShortCriticalTextSafely(builder: Notification.Builder, text: String) {
@@ -267,7 +292,9 @@ object DownloadNotificationManager {
             .setContentText(appContext.getString(R.string.version_file_size, version, fileSize))
             .setProgress(100, 0, false)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .build()
@@ -282,7 +309,9 @@ object DownloadNotificationManager {
             .setContentText(appContext.getString(R.string.version_progress, version, progress))
             .setProgress(100, progress, false)
             .setOngoing(progress < 100)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .build()
@@ -311,18 +340,18 @@ object DownloadNotificationManager {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(appContext, CHANNEL_COMPLETE_ID)
             .setSmallIcon(R.drawable.updated) // Checkmark icon when complete
             .setContentTitle(appContext.getString(R.string.update_ready))
             .setContentText(appContext.getString(R.string.tap_to_install_version, version))
             .setProgress(0, 0, false)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        notificationManager.notify(COMPLETE_NOTIFICATION_ID, notification)
     }
 }

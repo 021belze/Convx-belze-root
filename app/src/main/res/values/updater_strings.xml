@@ -5,6 +5,8 @@
     <string name="paused_status">Paused</string>
     <string name="download_progress_channel">Download Progress</string>
     <string name="download_progress_description">Download Notifications</string>
+    <string name="download_complete_channel">Update Ready</string>
+    <string name="download_complete_description">Notifications when an update is downloaded and ready to install</string>
     <string name="update_failed">Update Failed</string>
     <string name="failed_to_download_version">Failed to download version %1$s</string>
     <string name="failed_to_download_version_error">Error parsing version %1$s : %2$s</string>
