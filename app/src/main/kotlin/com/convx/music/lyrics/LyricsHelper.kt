@@ -65,9 +65,10 @@ constructor(
     private var currentLyricsJob: Job? = null
 
     suspend fun getLyrics(mediaMetadata: MediaMetadata): LyricsWithProvider {
-        val artistTitleKey = "${mediaMetadata.artists.joinToString { it.name }}-${mediaMetadata.title}".replace(" ", "")
+        val artistsString = mediaMetadata.artists.joinToString { it.name }
+        val artistTitleKey = "$artistsString ${mediaMetadata.title}".lowercase().replace(Regex("[^a-z0-9]"), "")
         val cached = cache.get(mediaMetadata.id)?.firstOrNull() ?: cache.get(artistTitleKey)?.firstOrNull()
-        if (cached != null) {
+        if (cached != null && cached.lyrics != LYRICS_NOT_FOUND && cached.lyrics.isNotBlank()) {
             return LyricsWithProvider(cached.lyrics, cached.providerName)
         }
 
@@ -95,15 +96,22 @@ constructor(
                 for (provider in providers) {
                     if (!provider.isEnabled(context)) continue
                     try {
-                        // Max 3s per provider: enough for YouTube Music's two sequential
-                        // API calls (next + lyrics browse) while still failing fast on dead providers.
-                        val result = withTimeoutOrNull(3000L) {
+                        val result = withTimeoutOrNull(5000L) {
                             provider.getLyrics(
                                 mediaMetadata.id,
                                 mediaMetadata.title,
-                                mediaMetadata.artists.joinToString { it.name },
+                                artistsString,
                                 mediaMetadata.duration,
                                 mediaMetadata.album?.title,
+                            )
+                        } ?: withTimeoutOrNull(3000L) {
+                            // Fallback: title-only query if artist name had mismatch
+                            provider.getLyrics(
+                                mediaMetadata.id,
+                                mediaMetadata.title,
+                                "",
+                                mediaMetadata.duration,
+                                null,
                             )
                         } ?: continue
 
@@ -147,9 +155,9 @@ constructor(
     ) {
         currentLyricsJob?.cancel()
 
-        val cacheKey = "$songArtists-$songTitle".replace(" ", "")
+        val cacheKey = "$songArtists $songTitle".lowercase().replace(Regex("[^a-z0-9]"), "")
         val cached = cache.get(mediaId) ?: cache.get(cacheKey)
-        if (cached != null) {
+        if (cached != null && cached.size > 1) {
             cached.forEach { callback(it) }
             return
         }
@@ -181,8 +189,10 @@ constructor(
                     }
                 }
             }
-            cache.put(cacheKey, allResult)
-            cache.put(mediaId, allResult)
+            if (allResult.isNotEmpty()) {
+                cache.put(cacheKey, allResult)
+                cache.put(mediaId, allResult)
+            }
         }
 
         currentLyricsJob?.join()
@@ -191,6 +201,12 @@ constructor(
     fun cancelCurrentLyricsJob() {
         currentLyricsJob?.cancel()
         currentLyricsJob = null
+    }
+
+    fun evictCache(mediaId: String? = null, artistTitleKey: String? = null) {
+        if (mediaId != null) cache.remove(mediaId)
+        if (artistTitleKey != null) cache.remove(artistTitleKey)
+        if (mediaId == null && artistTitleKey == null) cache.evictAll()
     }
 
     companion object {

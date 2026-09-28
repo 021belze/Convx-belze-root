@@ -31,19 +31,25 @@ package com.convx.music.ui.component.floatingtabbar
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SharedTransitionScope.OverlayClip
+import androidx.compose.animation.SharedTransitionScope.ResizeMode
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -137,8 +143,8 @@ import kotlin.math.sign
 // Tuning for the gooey merge/split pulse across the inline<->expanded
 // crossfade — see GooeyTransition.kt. Not derived from fadeIn()/fadeOut()'s
 // own duration; just a reasonable match for it.
-private val GooeyPeakBlur = 12.dp
-private const val GooeyDurationMs = 300
+private val GooeyPeakBlur = 8.dp
+private const val GooeyDurationMs = 220
 
 // Rim/shadow the selection puck keeps when it is NOT being pressed. Both used to
 // be driven straight off pressProgress, i.e. zero at rest, which left the puck
@@ -274,10 +280,11 @@ fun FloatingTabBar(
             Box {
                 transition.AnimatedContent(
                     transitionSpec = {
-                        fadeIn(tween(220, easing = FastOutSlowInEasing)) togetherWith
-                            fadeOut(tween(180, easing = FastOutSlowInEasing))
+                        (fadeIn(tween(180, easing = FastOutSlowInEasing)) togetherWith
+                            fadeOut(tween(140, easing = LinearEasing))) using
+                            SizeTransform(clip = false)
                     },
-                    contentAlignment = Alignment.BottomCenter
+                    contentAlignment = Alignment.Center
                 ) { targetVisual ->
             when (targetVisual) {
                 FloatingTabBarVisual.INLINE -> InlineBar(
@@ -446,7 +453,7 @@ class FloatingTabBarScrollConnection(
 fun rememberFloatingTabBarScrollConnection(
     initialIsInline: Boolean = false,
     scrollThreshold: Dp = 50.dp,
-    expandThreshold: Dp = 8.dp,
+    expandThreshold: Dp = 28.dp,
     inlineBehavior: FloatingTabBarInlineBehavior = FloatingTabBarInlineBehavior.OnScrollDown
 ): FloatingTabBarScrollConnection = with(LocalDensity.current) {
     val scrollThresholdPx = scrollThreshold.toPx()
@@ -741,6 +748,10 @@ private fun SharedTransitionScope.InlineAccessory(
                         Modifier.sharedBounds(
                             sharedContentState = rememberSharedContentState("accessory"),
                             animatedVisibilityScope = animatedVisibilityScope,
+                            enter = fadeIn(tween(135, delayMillis = 85, easing = LinearOutSlowInEasing)),
+                            exit = fadeOut(tween(65, easing = FastOutLinearInEasing)),
+                            boundsTransform = BoundsTransform { _, _ -> tween(220, easing = FastOutSlowInEasing) },
+                            resizeMode = ResizeMode.RemeasureToBounds,
                             clipInOverlayDuringTransition = OverlayClip(shapes.accessoryShape),
                             zIndexInOverlay = 1f
                         )
@@ -1071,6 +1082,10 @@ private fun SharedTransitionScope.ExpandedAccessory(
                     Modifier.sharedBounds(
                         sharedContentState = rememberSharedContentState("accessory"),
                         animatedVisibilityScope = animatedVisibilityScope,
+                        enter = fadeIn(tween(135, delayMillis = 85, easing = LinearOutSlowInEasing)),
+                        exit = fadeOut(tween(65, easing = FastOutLinearInEasing)),
+                        boundsTransform = BoundsTransform { _, _ -> tween(220, easing = FastOutSlowInEasing) },
+                        resizeMode = ResizeMode.RemeasureToBounds,
                         clipInOverlayDuringTransition = OverlayClip(shapes.accessoryShape),
                         zIndexInOverlay = 1f
                     )

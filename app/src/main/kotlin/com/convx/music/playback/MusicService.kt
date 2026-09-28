@@ -58,6 +58,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
 import androidx.media3.datasource.cache.SimpleCache
+import com.convx.music.lyrics.LyricsUtils
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -826,10 +827,11 @@ class MusicService :
             if (showLyrics && mediaMetadata != null) {
                 val existing = database.lyrics(mediaMetadata.id).first()
                 val allowedProviders = setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown")
-                if (existing != null && existing.provider !in allowedProviders) {
+                val isCorrupted = existing != null && mediaMetadata.duration > 0 && !LyricsUtils.isValidLrcForDuration(existing.lyrics, mediaMetadata.duration)
+                if (existing != null && (existing.provider !in allowedProviders || isCorrupted)) {
                     database.query { delete(existing) }
                 }
-                if (existing == null || existing.provider !in allowedProviders) {
+                if (existing == null || existing.provider !in allowedProviders || isCorrupted) {
                     // Short yield so initial audio stream buffer gets network bandwidth priority
                     kotlinx.coroutines.delay(250L)
                     val lyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)

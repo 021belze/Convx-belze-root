@@ -636,7 +636,7 @@ data class ParsedVersion(
 )
 
 fun parseVersion(versionStr: String): ParsedVersion {
-    val isBeta = versionStr.startsWith("b", ignoreCase = true)
+    val isBeta = versionStr.startsWith("b", ignoreCase = true) || versionStr.contains("beta", ignoreCase = true)
     val clean = versionStr.trim().removePrefix("v").removePrefix("V").removePrefix("b").removePrefix("B")
 
     // Split semver from suffixes: e.g. "1.5.2-R8-Optimized" or "1.5.2 R10-optimized" -> ["1.5.2", "R8", "Optimized"]

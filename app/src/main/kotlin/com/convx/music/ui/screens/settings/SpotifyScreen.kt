@@ -1,115 +1,70 @@
 package com.convx.music.ui.screens.settings
 
-import com.convx.music.ui.utils.appTopBarWindowInsets
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import android.webkit.WebViewClient
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
+import timber.log.Timber
 import androidx.compose.animation.AnimatedVisibility
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.animateColorAsState
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.LinearEasing
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.RepeatMode
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.animateFloat
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.infiniteRepeatable
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.rememberInfiniteTransition
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.tween
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.background
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.graphics.graphicsLayer
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.layout.*
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.lazy.items
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.rememberScrollState
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.shape.CircleShape
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.verticalScroll
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.*
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.runtime.*
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.runtime.saveable.rememberSaveable
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.Alignment
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.Modifier
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.draw.clip
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.graphics.Color
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.layout.ContentScale
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.platform.LocalContext
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.res.painterResource
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.res.stringResource
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.text.font.FontWeight
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.text.style.TextOverflow
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.unit.dp
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.viewinterop.AndroidView
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.window.Dialog
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.navigation.NavController
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import coil3.compose.AsyncImage
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.music.spotify.SpotifyAuth
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.music.spotify.SpotifyMapper
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.music.spotify.models.SpotifyPlaylist
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.LocalPlayerAwareWindowInsets
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.R
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.component.DefaultDialog
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.component.IconButton
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.component.Material3SettingsGroup
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.component.Material3SettingsItem
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.menu.LoadingScreen
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.utils.backToMain
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.utils.rememberPreference
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.viewmodels.SpotifyImportViewModel
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -416,6 +371,9 @@ fun SpotifyScreen(
     }
 }
 
+private const val SPOTIFY_CHROME_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14; SM-S921U; Build/UP1A.231005.007) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SpotifyLoginSheet(
@@ -425,6 +383,10 @@ private fun SpotifyLoginSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var captured by remember { mutableStateOf(false) }
+    var isLoadingPage by remember { mutableStateOf(true) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var manualCookieText by rememberSaveable { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
 
     DisposableEffect(Unit) {
         onDispose {
@@ -450,76 +412,271 @@ private fun SpotifyLoginSheet(
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.spotify_login_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(R.string.spotify_waiting_for_login),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(MaterialTheme.shapes.large),
-                factory = { context ->
-                    WebView(context).apply {
-                        val cookieManager = CookieManager.getInstance()
-                        cookieManager.setAcceptCookie(true)
-                        cookieManager.setAcceptThirdPartyCookies(this, true)
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.setSupportZoom(true)
-                        settings.builtInZoomControls = true
-                        settings.displayZoomControls = false
-                        webViewClient = object : WebViewClient() {
-                            private fun captureCookies(url: String?): Boolean {
-                                if (captured) return true
-                                cookieManager.flush()
-                                val cookiesStr = cookieManager.getCookie("https://open.spotify.com") ?: ""
-                                val cookies = cookiesStr.split(";").associate {
-                                    val parts = it.split("=")
-                                    val key = parts.firstOrNull()?.trim().orEmpty()
-                                    val valStr = parts.drop(1).joinToString("=").trim()
-                                    key to valStr
-                                }
-                                val spDc = cookies["sp_dc"].orEmpty()
-                                if (spDc.isBlank()) return false
-                                captured = true
-                                onCookiesCaptured(spDc, cookies["sp_key"].orEmpty())
-                                return true
-                            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.spotify_login_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = if (selectedTab == 0) {
+                            stringResource(R.string.spotify_waiting_for_login)
+                        } else {
+                            "Paste your sp_dc cookie to connect"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView,
-                                request: WebResourceRequest,
-                            ): Boolean = captureCookies(request.url?.toString())
-
-                            override fun onPageStarted(
-                                view: WebView,
-                                url: String?,
-                                favicon: android.graphics.Bitmap?,
-                            ) {
-                                captureCookies(url)
-                            }
-
-                            override fun onPageFinished(view: WebView, url: String?) {
-                                captureCookies(url)
+                if (selectedTab == 0) {
+                    IconButton(
+                        onClick = {
+                            webView?.let { wv ->
+                                isLoadingPage = true
+                                wv.clearCache(true)
+                                wv.reload()
                             }
                         }
-                        webView = this
-                        cookieManager.removeAllCookies(null)
-                        cookieManager.flush()
-                        loadUrl(SpotifyAuth.LOGIN_URL)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.sync),
+                            contentDescription = "Refresh",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                },
-                update = { view ->
-                    webView = view
-                },
-            )
+                }
+            }
+
+            PrimaryTabRow(
+                selectedTabIndex = selectedTab,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("In-App Browser") }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("Manual Cookie") }
+                )
+            }
+
+            if (selectedTab == 0) {
+                if (isLoadingPage) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
+                AndroidView(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(MaterialTheme.shapes.large),
+                    factory = { context ->
+                        WebView(context).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            setBackgroundColor(android.graphics.Color.parseColor("#121212"))
+
+                            val cookieManager = CookieManager.getInstance()
+                            cookieManager.setAcceptCookie(true)
+                            cookieManager.setAcceptThirdPartyCookies(this, true)
+
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                databaseEnabled = true
+                                cacheMode = WebSettings.LOAD_DEFAULT
+                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                allowContentAccess = true
+                                allowFileAccess = false
+                                setSupportZoom(true)
+                                builtInZoomControls = true
+                                displayZoomControls = false
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
+                                javaScriptCanOpenWindowsAutomatically = true
+                                setSupportMultipleWindows(false)
+                                userAgentString = SPOTIFY_CHROME_USER_AGENT
+                            }
+
+                            if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
+                            }
+
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                    if (newProgress >= 85) {
+                                        isLoadingPage = false
+                                    }
+                                }
+
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                    Timber.d("Spotify WebView JS: [${consoleMessage?.messageLevel()}] ${consoleMessage?.message()} (${consoleMessage?.sourceId()}:${consoleMessage?.lineNumber()})")
+                                    return super.onConsoleMessage(consoleMessage)
+                                }
+                            }
+
+                            webViewClient = object : WebViewClient() {
+                                private fun captureCookies(url: String?): Boolean {
+                                    if (captured) return true
+                                    cookieManager.flush()
+                                    val spotifyCookies = cookieManager.getCookie("https://spotify.com") ?: ""
+                                    val openCookies = cookieManager.getCookie("https://open.spotify.com") ?: ""
+                                    val accountsCookies = cookieManager.getCookie("https://accounts.spotify.com") ?: ""
+                                    val allCookiesStr = "$spotifyCookies; $openCookies; $accountsCookies"
+
+                                    val cookies = allCookiesStr.split(";").associate {
+                                        val parts = it.split("=")
+                                        val key = parts.firstOrNull()?.trim().orEmpty()
+                                        val valStr = parts.drop(1).joinToString("=").trim()
+                                        key to valStr
+                                    }
+                                    val spDc = cookies["sp_dc"].orEmpty()
+                                    if (spDc.isBlank()) return false
+                                    captured = true
+                                    onCookiesCaptured(spDc, cookies["sp_key"].orEmpty())
+                                    return true
+                                }
+
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView,
+                                    request: WebResourceRequest,
+                                ): Boolean {
+                                    val url = request.url?.toString().orEmpty()
+                                    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                                        return true
+                                    }
+                                    return captureCookies(url)
+                                }
+
+                                override fun onPageStarted(
+                                    view: WebView,
+                                    url: String?,
+                                    favicon: android.graphics.Bitmap?,
+                                ) {
+                                    isLoadingPage = true
+                                    captureCookies(url)
+                                }
+
+                                override fun onPageFinished(view: WebView, url: String?) {
+                                    isLoadingPage = false
+                                    captureCookies(url)
+                                }
+
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    error: WebResourceError?
+                                ) {
+                                    Timber.e("Spotify WebView onReceivedError: ${error?.errorCode} ${error?.description} for ${request?.url}")
+                                }
+
+                                override fun onReceivedHttpError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    errorResponse: WebResourceResponse?
+                                ) {
+                                    Timber.e("Spotify WebView onReceivedHttpError: ${errorResponse?.statusCode} ${errorResponse?.reasonPhrase} for ${request?.url}")
+                                }
+                            }
+                            webView = this
+                            loadUrl(SpotifyAuth.LOGIN_URL)
+                        }
+                    },
+                    update = { view ->
+                        webView = view
+                    },
+                )
+            } else {
+                // Manual Cookie Input Fallback
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "If in-app login is blocked by your network or browser security, you can log in once to open.spotify.com in your normal browser, copy the 'sp_dc' cookie, and paste it below.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = manualCookieText,
+                        onValueChange = { manualCookieText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("sp_dc Cookie Value") },
+                        placeholder = { Text("AQ... or similar cookie value") },
+                        singleLine = false,
+                        maxLines = 4,
+                        trailingIcon = {
+                            if (manualCookieText.isNotEmpty()) {
+                                IconButton(onClick = { manualCookieText = "" }) {
+                                    Icon(painterResource(R.drawable.close), contentDescription = "Clear")
+                                }
+                            }
+                        }
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                clipboardManager.getText()?.text?.let { text ->
+                                    val cleaned = text.trim()
+                                    // Handle cases where user copied "sp_dc=AQ..."
+                                    val token = if (cleaned.contains("sp_dc=")) {
+                                        cleaned.substringAfter("sp_dc=").substringBefore(";")
+                                    } else {
+                                        cleaned
+                                    }
+                                    manualCookieText = token
+                                }
+                            }
+                        ) {
+                            Text("Paste from Clipboard")
+                        }
+
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            enabled = manualCookieText.isNotBlank(),
+                            onClick = {
+                                val cleaned = manualCookieText.trim()
+                                val token = if (cleaned.contains("sp_dc=")) {
+                                    cleaned.substringAfter("sp_dc=").substringBefore(";")
+                                } else {
+                                    cleaned
+                                }
+                                if (token.isNotBlank()) {
+                                    onCookiesCaptured(token, "")
+                                }
+                            }
+                        ) {
+                            Text("Connect")
+                        }
+                    }
+                }
+            }
         }
     }
 }

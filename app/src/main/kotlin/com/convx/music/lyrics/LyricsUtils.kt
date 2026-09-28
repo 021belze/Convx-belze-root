@@ -24,6 +24,7 @@ object LyricsUtils {
     // Regex for agent and background markers
     private val AGENT_REGEX = "\\{agent:([^}]+)\\}".toRegex()
     private val BACKGROUND_REGEX = "^\\{bg\\}".toRegex()
+    private val OFFSET_REGEX = "\\[offset:\\s*([+-]?\\d+)\\]".toRegex(RegexOption.IGNORE_CASE)
 
     private val KANA_ROMAJI_MAP: Map<String, String> = mapOf(
         // Digraphs (Yōon - combinations like kya, sho)
@@ -360,6 +361,12 @@ object LyricsUtils {
         // Decode HTML entities (e.g. &#x27; -> ', &amp; -> &)
         val decodedLyrics = decodeHtmlEntities(unescapedLyrics)
         
+        // Parse global LRC [offset:+/-ms] tag if present (+ delays lyrics, - advances lyrics)
+        val lrcOffsetMs = decodedLyrics.lines()
+            .firstNotNullOfOrNull { line ->
+                OFFSET_REGEX.find(line.trim())?.groupValues?.get(1)?.toLongOrNull()
+            } ?: 0L
+
         val lines = decodedLyrics.lines()
             .filter { it.isNotBlank() && !it.trim().startsWith("[offset:") }
         
@@ -370,9 +377,9 @@ object LyricsUtils {
         }
         
         return if (isRichSync) {
-            parseRichSyncLyrics(lines)
+            parseRichSyncLyrics(lines, lrcOffsetMs)
         } else {
-            parseStandardLyrics(lines)
+            parseStandardLyrics(lines, lrcOffsetMs)
         }
     }
     
@@ -380,7 +387,7 @@ object LyricsUtils {
      * Parse rich sync lyrics format: [MM:SS.mm]<MM:SS.mm> word <MM:SS.mm> word ...
      * This format provides word-by-word timing for karaoke-style highlighting
      */
-    private fun parseRichSyncLyrics(lines: List<String>): List<LyricsEntry> {
+    private fun parseRichSyncLyrics(lines: List<String>, lrcOffsetMs: Long = 0L): List<LyricsEntry> {
         val result = mutableListOf<LyricsEntry>()
         
         lines.forEachIndexed { index, line ->
@@ -390,9 +397,9 @@ object LyricsUtils {
                 val seconds = matchResult.groupValues[2].toLongOrNull() ?: 0L
                 val centiseconds = matchResult.groupValues[3].toLongOrNull() ?: 0L
                 
-                // Convert to milliseconds
+                // Convert to milliseconds and apply global [offset]
                 val millisPart = if (matchResult.groupValues[3].length == 3) centiseconds else centiseconds * 10
-                val lineTimeMs = minutes * DateUtils.MINUTE_IN_MILLIS + seconds * DateUtils.SECOND_IN_MILLIS + millisPart
+                val lineTimeMs = (minutes * DateUtils.MINUTE_IN_MILLIS + seconds * DateUtils.SECOND_IN_MILLIS + millisPart + lrcOffsetMs).coerceAtLeast(0L)
                 
                 var content = matchResult.groupValues[4].trimStart()
                 
@@ -410,7 +417,7 @@ object LyricsUtils {
                 }
                 
                 // Parse word-level timestamps from content
-                val wordTimings = parseRichSyncWords(content, index, lines)
+                val wordTimings = parseRichSyncWords(content, index, lines, lrcOffsetMs)
                 
                 // Extract plain text (remove all <MM:SS.mm> tags)
                 val plainText = content.replace(Regex("<\\d{1,2}:\\d{2}\\.\\d{2,3}>\\s*"), "").trim()
@@ -428,21 +435,22 @@ object LyricsUtils {
      * Parse word timestamps from rich sync content
      * Format: <MM:SS.mm> word <MM:SS.mm> word ...
      */
-    private fun parseRichSyncWords(content: String, currentIndex: Int, allLines: List<String>): List<WordTimestamp>? {
+    private fun parseRichSyncWords(content: String, currentIndex: Int, allLines: List<String>, lrcOffsetMs: Long = 0L): List<WordTimestamp>? {
         val wordMatches = RICH_SYNC_WORD_REGEX.findAll(content).toList()
         
         if (wordMatches.isEmpty()) return null
         
         val wordTimings = mutableListOf<WordTimestamp>()
+        val offsetSeconds = lrcOffsetMs / 1000.0
         
         wordMatches.forEachIndexed { index, match ->
             val minutes = match.groupValues[1].toLongOrNull() ?: 0L
             val seconds = match.groupValues[2].toLongOrNull() ?: 0L
             val fraction = match.groupValues[3].toLongOrNull() ?: 0L
             
-            // Convert to seconds (Double)
+            // Convert to seconds (Double) with offset
             val fractionPart = if (match.groupValues[3].length == 3) fraction / 1000.0 else fraction / 100.0
-            val startTimeSeconds = minutes * 60.0 + seconds + fractionPart
+            val startTimeSeconds = (minutes * 60.0 + seconds + fractionPart + offsetSeconds).coerceAtLeast(0.0)
             
             val wordText = match.groupValues[4].trim()
             
@@ -453,11 +461,11 @@ object LyricsUtils {
                 val nextSeconds = nextMatch.groupValues[2].toLongOrNull() ?: 0L
                 val nextFraction = nextMatch.groupValues[3].toLongOrNull() ?: 0L
                 val nextFractionPart = if (nextMatch.groupValues[3].length == 3) nextFraction / 1000.0 else nextFraction / 100.0
-                nextMinutes * 60.0 + nextSeconds + nextFractionPart
+                (nextMinutes * 60.0 + nextSeconds + nextFractionPart + offsetSeconds).coerceAtLeast(0.0)
             } else {
                 // For last word, try to get next line's start time or add a default duration
                 val nextLineTime = getNextLineStartTime(currentIndex, allLines)
-                nextLineTime ?: (startTimeSeconds + 0.5) // Default 500ms duration for last word
+                (nextLineTime?.plus(offsetSeconds) ?: (startTimeSeconds + 0.5)).coerceAtLeast(0.0)
             }
             
             if (wordText.isNotBlank()) {
@@ -488,19 +496,19 @@ object LyricsUtils {
     /**
      * Parse standard synced lyrics format: [MM:SS.mm] text
      */
-    private fun parseStandardLyrics(lines: List<String>): List<LyricsEntry> {
+    private fun parseStandardLyrics(lines: List<String>, lrcOffsetMs: Long = 0L): List<LyricsEntry> {
         val result = mutableListOf<LyricsEntry>()
         
         var i = 0
         while (i < lines.size) {
             val line = lines[i]
             if (!line.trim().startsWith("<") || !line.trim().endsWith(">")) {
-                val entries = parseLine(line, null)
+                val entries = parseLine(line, null, lrcOffsetMs)
                 if (entries != null) {
                     val wordTimestamps = if (i + 1 < lines.size) {
                         val nextLine = lines[i + 1]
                         if (nextLine.trim().startsWith("<") && nextLine.trim().endsWith(">")) {
-                            parseWordTimestamps(nextLine.trim().removeSurrounding("<", ">"))
+                            parseWordTimestamps(nextLine.trim().removeSurrounding("<", ">"), lrcOffsetMs)
                         } else null
                     } else null
                     
@@ -518,16 +526,17 @@ object LyricsUtils {
         return result.sorted()
     }
     
-    private fun parseWordTimestamps(data: String): List<WordTimestamp>? {
+    private fun parseWordTimestamps(data: String, lrcOffsetMs: Long = 0L): List<WordTimestamp>? {
         if (data.isBlank()) return null
+        val offsetSeconds = lrcOffsetMs / 1000.0
         return try {
             data.split("|").mapNotNull { wordData ->
                 val parts = wordData.split(":")
                 if (parts.size == 3) {
                     WordTimestamp(
                         text = parts[0],
-                        startTime = parts[1].toDouble(),
-                        endTime = parts[2].toDouble()
+                        startTime = (parts[1].toDouble() + offsetSeconds).coerceAtLeast(0.0),
+                        endTime = (parts[2].toDouble() + offsetSeconds).coerceAtLeast(0.0)
                     )
                 } else null
             }
@@ -536,7 +545,7 @@ object LyricsUtils {
         }
     }
 
-    private fun parseLine(line: String, words: List<WordTimestamp>? = null): List<LyricsEntry>? {
+    private fun parseLine(line: String, words: List<WordTimestamp>? = null, lrcOffsetMs: Long = 0L): List<LyricsEntry>? {
         if (line.isEmpty()) {
             return null
         }
@@ -567,7 +576,7 @@ object LyricsUtils {
                 if (milString.length == 2) {
                     mil *= 10
                 }
-                val time = min * DateUtils.MINUTE_IN_MILLIS + sec * DateUtils.SECOND_IN_MILLIS + mil
+                val time = (min * DateUtils.MINUTE_IN_MILLIS + sec * DateUtils.SECOND_IN_MILLIS + mil + lrcOffsetMs).coerceAtLeast(0L)
                 LyricsEntry(time, text, words, agent = agent, isBackground = isBackground)
             }.toList()
     }
@@ -576,23 +585,22 @@ object LyricsUtils {
         lines: List<LyricsEntry>,
         position: Long,
     ): Int {
-        // Binary search over the time-sorted LRC lines instead of a linear scan.
-        // Finds the first line whose time is >= position + 300ms; the current
-        // line is the one before it.
+        if (lines.isEmpty()) return -1
+        // Lead-in threshold of 200ms ensures visual highlight arrives exactly on the beat
+        val target = position + 200L
         var low = 0
         var high = lines.size - 1
-        var firstPast = lines.size
-        val target = position + 300L
+        var result = -1
         while (low <= high) {
             val mid = (low + high) ushr 1
-            if (lines[mid].time >= target) {
-                firstPast = mid
-                high = mid - 1
-            } else {
+            if (lines[mid].time <= target) {
+                result = mid
                 low = mid + 1
+            } else {
+                high = mid - 1
             }
         }
-        return if (firstPast == 0) -1 else firstPast - 1
+        return result
     }
 
     // TODO: Will be useful if we let the user pick the language, useless for now
@@ -1221,5 +1229,54 @@ object LyricsUtils {
 
     private fun isCyrillicVowel(char: Char): Boolean {
         return "АаЕеЄєИиІіЇїОоУуЮюЯяЫыЭэ".contains(char)
+    }
+
+    /**
+     * Fast sanity check for synced lyrics against target duration.
+     * Prevents displaying or caching mismatched/corrupted lyrics (e.g. 290s club mix on 165s edit).
+     */
+    fun isValidLrcForDuration(syncedLyrics: String?, duration: Int): Boolean {
+        if (syncedLyrics.isNullOrBlank() || duration <= 0) return true
+
+        var firstTime: Double? = null
+        var lastTime: Double? = null
+
+        for (line in syncedLyrics.lineSequence()) {
+            if (!line.startsWith("[")) continue
+            val parsed = parseLrcTimestampSeconds(line) ?: continue
+            if (firstTime == null) {
+                firstTime = parsed
+            }
+            lastTime = parsed
+        }
+
+        if (firstTime == null || lastTime == null) return true
+
+        // 1. Last timestamp cannot exceed song duration by more than 8 seconds
+        if (lastTime > (duration + 8.0)) {
+            return false
+        }
+
+        // 2. Allow songs with long instrumental intros (up to 75% of duration)
+        if (firstTime > (duration * 0.75)) {
+            return false
+        }
+
+        return true
+    }
+
+    private fun parseLrcTimestampSeconds(line: String): Double? {
+        val closeBracket = line.indexOf(']')
+        if (closeBracket <= 1 || !line.startsWith("[")) return null
+        val colon = line.indexOf(':')
+        if (colon <= 1 || colon >= closeBracket) return null
+
+        val minStr = line.substring(1, colon)
+        val secStr = line.substring(colon + 1, closeBracket)
+
+        val mins = minStr.toIntOrNull() ?: return null
+        val secs = secStr.toDoubleOrNull() ?: return null
+
+        return mins * 60.0 + secs
     }
 }

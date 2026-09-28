@@ -1249,10 +1249,7 @@ fun BottomSheetPlayer(
                                         AsyncImage(
                                             model = ImageRequest.Builder(context)
                                                 .data(thumbnailUrl)
-                                                // 48x48 upscaled ~20-30x to fill the screen showed visible
-                                                // blocking even under a heavy blur — 160px matches the
-                                                // decode size HeroArtwork.kt already tuned for "visually
-                                                // identical to full-res once blurred" at a gentler upscale.
+                                                // 160px decode size tuned for visually identical smooth atmospheric blur
                                                 .size(160, 160)
                                                 .allowHardware(false)
                                                 .build(),
@@ -1499,58 +1496,44 @@ fun BottomSheetPlayer(
                                         Box(modifier = Modifier.fillMaxSize().background(Color.Black))
                                     }
 
-                                    // Layer 2: Clear Artwork (Limited to top 60% of screen)
+                                    // Layer 2: Clear Canvas Video (Limited to top 65% of screen when animated canvas is available)
                                     // Fades out when lyrics are shown to provide a full-screen blur
-                                    val clearArtworkAlpha by animateFloatAsState(
-                                        targetValue = if (showInlineLyrics) 0f else 1f,
-                                        animationSpec = tween(500),
-                                        label = "clearArtworkAlpha"
-                                    )
-                                    
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight(0.65f) // Occupies top 65%
-                                            .graphicsLayer {
-                                                alpha = clearArtworkAlpha
-                                                compositingStrategy = CompositingStrategy.Offscreen
-                                            }
-                                            .drawWithContent {
-                                                drawContent()
-                                                // Fade the bottom edge of the clear box for a cloudy blend
-                                                drawRect(
-                                                    brush = Brush.verticalGradient(
-                                                        colorStops = arrayOf(
-                                                            0.00f to Color.Black,
-                                                            0.75f to Color.Black,
-                                                            0.92f to Color.Black.copy(alpha = 0.4f),
-                                                            1.00f to Color.Transparent,
-                                                        )
-                                                    ),
-                                                    blendMode = BlendMode.DstIn
-                                                )
-                                            }
-                                    ) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(thumbnailUrl)
-                                                .size(CoilSize.ORIGINAL)
-                                                .crossfade(true)
-                                                .build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
+                                    if (enableCanvas && canvasArtwork != null && backgroundVisible) {
+                                        val clearArtworkAlpha by animateFloatAsState(
+                                            targetValue = if (showInlineLyrics) 0f else 1f,
+                                            animationSpec = tween(500),
+                                            label = "clearArtworkAlpha"
                                         )
 
-                                        if (enableCanvas && canvasArtwork != null && backgroundVisible) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .fillMaxHeight(0.65f) // Occupies top 65%
+                                                .graphicsLayer {
+                                                    alpha = clearArtworkAlpha
+                                                    compositingStrategy = CompositingStrategy.Offscreen
+                                                }
+                                                .drawWithContent {
+                                                    drawContent()
+                                                    // Fade the bottom edge of the clear box for a cloudy blend
+                                                    drawRect(
+                                                        brush = Brush.verticalGradient(
+                                                            colorStops = arrayOf(
+                                                                0.00f to Color.Black,
+                                                                0.75f to Color.Black,
+                                                                0.92f to Color.Black.copy(alpha = 0.4f),
+                                                                1.00f to Color.Transparent,
+                                                            )
+                                                        ),
+                                                        blendMode = BlendMode.DstIn
+                                                    )
+                                                }
+                                        ) {
                                             BackgroundVideoView(
                                                 mediaId = mediaMetadata?.id ?: "",
                                                 videoUrl = canvasArtwork?.animated ?: canvasArtwork?.videoUrl ?: "",
                                                 isPlaying = isPlaying,
                                                 onError = {
-                                                    // This candidate's video doesn't actually play (dead
-                                                    // link, unsupported format, ...) — try the next one
-                                                    // in priority order instead of just going blank.
                                                     println("CanvasFallback: onError fired at index=$canvasCandidateIndex of ${canvasCandidates.size} candidates")
                                                     if (canvasCandidateIndex < canvasCandidates.lastIndex) {
                                                         canvasCandidateIndex++

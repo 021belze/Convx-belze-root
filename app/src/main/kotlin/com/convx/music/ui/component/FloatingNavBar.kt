@@ -293,7 +293,7 @@ private fun AppFloatingNavBarChrome(
     }
     val inlineAccessory: (@Composable SharedTransitionScope.(Modifier, AnimatedVisibilityScope) -> Unit)? =
         if (showPlayerAccessory) {
-            { accessoryModifier, _ ->
+            { accessoryModifier, animatedVisibilityScope ->
                 FloatingMiniPlayer(
                     isInline = true,
                     contentColor = accessoryContentColor,
@@ -305,6 +305,8 @@ private fun AppFloatingNavBarChrome(
                     // fell back to a plain expand instead of opening the queue.
                     onLyricsClick = onAccessoryLyricsClick,
                     onQueueClick = onAccessoryQueueClick,
+                    sharedTransitionScope = this,
+                    tabBarVisibilityScope = animatedVisibilityScope,
                     modifier = accessoryModifier.then(tabBarContentModifier),
                 )
             }
@@ -313,13 +315,15 @@ private fun AppFloatingNavBarChrome(
         }
     val expandedAccessory: (@Composable SharedTransitionScope.(Modifier, AnimatedVisibilityScope) -> Unit)? =
         if (showPlayerAccessory) {
-            { accessoryModifier, _ ->
+            { accessoryModifier, animatedVisibilityScope ->
                 FloatingMiniPlayer(
                     isInline = false,
                     contentColor = accessoryContentColor,
                     onClick = onAccessoryClick,
                     onLyricsClick = onAccessoryLyricsClick,
                     onQueueClick = onAccessoryQueueClick,
+                    sharedTransitionScope = this,
+                    tabBarVisibilityScope = animatedVisibilityScope,
                     modifier = accessoryModifier.fillMaxWidth().then(tabBarContentModifier),
                 )
             }

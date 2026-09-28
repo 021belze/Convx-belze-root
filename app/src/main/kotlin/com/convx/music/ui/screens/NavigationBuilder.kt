@@ -12,6 +12,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -36,6 +38,7 @@ import com.convx.music.ui.utils.LocalNavAnimatedVisibilityScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import com.convx.music.ui.utils.morphContainer
 import com.convx.music.ui.utils.hasMorphSource
 import com.convx.music.ui.utils.morphArtworkId
@@ -629,21 +632,26 @@ private fun NavGraphBuilder.sharedComposable(
 
 /**
  * Root tabs of the main navbar (Home, Songs, Library, Settings).
- * Uses a crisp, lightweight alpha crossfade without nested scale/spring animations
- * to ensure stutter-free switching between primary navigation destinations.
+ * Uses a fluid, hardware-accelerated Apple Music transition with FastOutSlowIn cubic easing.
+ * Each tab container is backed by a graphicsLayer to ensure buttery 60/120fps alpha compositing
+ * on low-to-midrange GPUs without re-measuring or re-drawing subtrees.
  */
 private fun NavGraphBuilder.mainTabComposable(
     route: String,
     content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
 ) = composable(
     route = route,
-    enterTransition = { fadeIn(tween(160, easing = LinearEasing)) },
-    exitTransition = { fadeOut(tween(140, easing = LinearEasing)) },
-    popEnterTransition = { fadeIn(tween(160, easing = LinearEasing)) },
-    popExitTransition = { fadeOut(tween(140, easing = LinearEasing)) },
+    enterTransition = { fadeIn(tween(190, easing = FastOutSlowInEasing)) },
+    exitTransition = { fadeOut(tween(140, easing = FastOutSlowInEasing)) },
+    popEnterTransition = { fadeIn(tween(190, easing = FastOutSlowInEasing)) },
+    popExitTransition = { fadeOut(tween(140, easing = FastOutSlowInEasing)) },
 ) { entry ->
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer()
+        ) {
             content(entry)
         }
     }

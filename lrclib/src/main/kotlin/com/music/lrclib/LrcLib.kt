@@ -2,6 +2,8 @@ package com.music.lrclib
 
 import com.music.lrclib.models.Track
 import com.music.lrclib.models.bestMatchingFor
+import com.music.lrclib.models.isValidLrcForDuration
+import com.music.lrclib.models.timingFingerprint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -122,25 +124,34 @@ object LrcLib {
         artist: String,
         title: String,
         album: String? = null,
+        duration: Int = -1,
     ): List<Track> {
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
         
         // Fast Strategy 1: Targeted track + artist search
-        var results = queryLyricsWithParams(
+        val targetResults = queryLyricsWithParams(
             trackName = cleanedTitle,
             artistName = cleanedArtist,
             albumName = album
         ).filter { it.syncedLyrics != null || it.plainLyrics != null }
         
-        if (results.isNotEmpty()) return results
+        // Strategy 2: Combined query.
+        // If Strategy 1 didn't find any valid synced lyrics for the target duration,
+        // or if we have fewer than 3 candidates, expand with general query to find variants like "- Edit"
+        val needExpansion = targetResults.isEmpty() || (duration > 0 && targetResults.none { 
+            it.syncedLyrics != null && isValidLrcForDuration(it.syncedLyrics, duration) 
+        }) || targetResults.size < 3
+
+        val combinedResults = if (needExpansion) {
+            queryLyricsWithParams(
+                query = "$cleanedArtist $cleanedTitle"
+            ).filter { it.syncedLyrics != null || it.plainLyrics != null }
+        } else {
+            emptyList()
+        }
         
-        // Fast Strategy 2: Combined query
-        results = queryLyricsWithParams(
-            query = "$cleanedArtist $cleanedTitle"
-        ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        
-        return results
+        return (targetResults + combinedResults).distinctBy { it.id }
     }
 
     suspend fun getLyrics(
@@ -152,30 +163,28 @@ object LrcLib {
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
 
-        // Fast path: Try exact match first via /api/get (< 300ms, direct database hit)
+        // Search candidate tracks from LRCLIB (with smart expansion for variants)
+        val tracks = queryLyrics(artist, title, album, duration)
+
+        // Also query exact match via /api/get
         val exactTrack = queryExactLyrics(cleanedTitle, cleanedArtist, duration, album)
             ?: (if (!album.isNullOrBlank()) queryExactLyrics(cleanedTitle, cleanedArtist, duration, null) else null)
             ?: (if (cleanedTitle != title.trim() || cleanedArtist != artist.trim()) {
                 queryExactLyrics(title.trim(), artist.trim(), duration, null)
             } else null)
 
-        val exactLyrics = exactTrack?.let { track ->
-            track.syncedLyrics ?: track.plainLyrics
-        }
+        // Combine exactTrack into candidate pool so consensus clustering evaluates all candidates
+        val candidatePool = (listOfNotNull(exactTrack) + tracks).distinctBy { it.id }
 
-        if (!exactLyrics.isNullOrBlank()) {
-            return@runCatching exactLyrics
-        }
-
-        // Fallback path: Search endpoint
-        val tracks = queryLyrics(artist, title, album)
-
-        val res = tracks.bestMatchingFor(duration, cleanedTitle, cleanedArtist)?.let { track ->
-            track.syncedLyrics ?: track.plainLyrics
+        val res = candidatePool.bestMatchingFor(duration, cleanedTitle, cleanedArtist)?.let { track ->
+            track.syncedLyrics?.takeIf { isValidLrcForDuration(it, duration) } ?: track.plainLyrics
         }?.let(LrcLib::Lyrics)
 
+        val fallbackLyrics = exactTrack?.syncedLyrics ?: exactTrack?.plainLyrics
         if (res != null) {
             return@runCatching res.text
+        } else if (!fallbackLyrics.isNullOrBlank()) {
+            return@runCatching fallbackLyrics
         } else {
             throw IllegalStateException("Lyrics unavailable")
         }
@@ -188,54 +197,84 @@ object LrcLib {
         album: String? = null,
         callback: (String) -> Unit,
     ) {
-        val tracks = queryLyrics(artist, title, album)
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
-        var count = 0
-        var plain = 0
 
-        val sortedTracks = when {
-            duration == -1 -> {
-                tracks.sortedByDescending { track ->
-                    var score = 0.0
+        // Query both target and general candidates
+        val tracks = queryLyrics(artist, title, album, duration)
+        val exactTrack = queryExactLyrics(cleanedTitle, cleanedArtist, duration, album)
+            ?: (if (!album.isNullOrBlank()) queryExactLyrics(cleanedTitle, cleanedArtist, duration, null) else null)
+            ?: (if (cleanedTitle != title.trim() || cleanedArtist != artist.trim()) {
+                queryExactLyrics(title.trim(), artist.trim(), duration, null)
+            } else null)
 
-                    if (track.syncedLyrics != null) score += 1.0
+        val candidatePool = (listOfNotNull(exactTrack) + tracks).distinctBy { it.id }
 
-                    val titleSimilarity = calculateStringSimilarity(cleanedTitle, track.trackName)
-                    val artistSimilarity = calculateStringSimilarity(cleanedArtist, track.artistName)
-                    score += (titleSimilarity + artistSimilarity) / 2.0
-                    
-                    score
-                }
+        // 1. Strict validity guard & Reasonable duration filter
+        val validCandidates = candidatePool.filter { track ->
+            val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
+            if (titleSim < 0.50) return@filter false
+
+            if (duration > 0) {
+                val diff = abs(track.duration.toInt() - duration)
+                // Discard extreme mismatches (> 25s diff)
+                if (diff > 25) return@filter false
             }
-            else -> {
-                tracks.sortedBy { abs(it.duration.toInt() - duration) }
+
+            if (track.syncedLyrics != null && !isValidLrcForDuration(track.syncedLyrics, duration)) {
+                return@filter false
             }
+
+            track.syncedLyrics != null || track.plainLyrics != null
         }
 
-        sortedTracks.forEach { track ->
-            currentCoroutineContext().ensureActive()
-            if (count <= 4) {
-                // Guard: title similarity must be ≥50% to avoid serving lyrics from a
-                // completely different song that happens to share a similar duration.
-                val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
-                if (titleSim < 0.50) return@forEach
+        // 2. Smart scoring: Synced karaoke lyrics at the TOP
+        val scoredTracks = validCandidates.sortedByDescending { track ->
+            var score = 0.0
+            val diff = if (duration > 0) abs(track.duration.toInt() - duration) else 0
 
-                if (track.syncedLyrics != null && duration == -1) {
-                    count++
-                    track.syncedLyrics.let(callback)
-                } else {
-                    // Relaxed duration matching (±5 seconds)
-                    if (track.syncedLyrics != null && abs(track.duration.toInt() - duration) <= 5) {
-                        count++
-                        track.syncedLyrics.let(callback)
-                    }
-                    if (track.plainLyrics != null && abs(track.duration.toInt() - duration) <= 5 && plain == 0) {
-                        count++
-                        plain++
-                        track.plainLyrics.let(callback)
-                    }
+            // Strongly prefer valid synced lyrics over plain text (+15.0)
+            if (track.syncedLyrics != null && isValidLrcForDuration(track.syncedLyrics, duration)) {
+                score += 15.0
+            }
+
+            if (duration > 0) {
+                when {
+                    diff <= 1 -> score += 10.0 // Top priority: exact master match
+                    diff <= 2 -> score += 8.0
+                    diff <= 5 -> score += 5.0
+                    diff <= 10 -> score += 2.0
+                    else -> score -= (diff * 0.1)
                 }
+            }
+
+            val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
+            val artistSim = calculateStringSimilarity(cleanedArtist, track.artistName)
+            score += (titleSim * 2.0 + artistSim)
+
+            score
+        }
+
+        // 3. Deduplication: group duplicate identical uploads so the user sees distinct options
+        val seenFingerprints = HashSet<String>()
+        var count = 0
+
+        for (track in scoredTracks) {
+            currentCoroutineContext().ensureActive()
+            if (count >= 15) break
+
+            val lyricsText = track.syncedLyrics?.takeIf { isValidLrcForDuration(it, duration) } ?: track.plainLyrics
+            if (lyricsText.isNullOrBlank()) continue
+
+            val fingerprint = if (track.syncedLyrics != null) {
+                timingFingerprint(track.syncedLyrics)
+            } else {
+                "plain:" + lyricsText.take(50).filter { it.isLetterOrDigit() }.lowercase()
+            }
+
+            if (seenFingerprints.add(fingerprint)) {
+                count++
+                callback(lyricsText)
             }
         }
     }

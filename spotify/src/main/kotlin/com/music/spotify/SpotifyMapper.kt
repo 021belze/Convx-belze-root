@@ -38,10 +38,14 @@ object SpotifyMapper {
         val durationMs: Int,
     )
 
+    private const val MIN_MATCH_SCORE = 0.35
+
+    fun minMatchThreshold(): Double = MIN_MATCH_SCORE
+
     fun buildSearchQuery(track: SpotifyTrack): String {
-        val artist = track.artists.firstOrNull()?.name.orEmpty()
+        val artists = track.artists.joinToString(", ") { it.name }
         val title = track.name
-        return if (artist.isEmpty()) title else "$artist $title"
+        return if (artists.isEmpty()) title else "$artists $title"
     }
 
     fun getPlaylistThumbnail(playlist: SpotifyPlaylist): String? {

@@ -93,6 +93,8 @@ constructor(
         mediaMetadata: MediaMetadata,
         lyricsEntity: LyricsEntity?,
     ) {
+        val artistTitleKey = "${mediaMetadata.artists.joinToString { it.name }}-${mediaMetadata.title}".replace(" ", "")
+        lyricsHelper.evictCache(mediaMetadata.id, artistTitleKey)
         database.query {
             lyricsEntity?.let(::delete)
             val lyricsWithProvider =

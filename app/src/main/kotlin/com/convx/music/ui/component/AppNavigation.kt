@@ -63,12 +63,37 @@ private data class NavItemState(
     val iconRes: Int
 )
 
+private val HomeChildRoutes = setOf(
+    "mood_and_genres",
+    "new_release",
+    "charts_screen",
+    "history",
+    "stats",
+    "account"
+)
+
+private val LibraryChildRoutes = setOf(
+    "local_music"
+)
+
 @Stable
 internal fun isRouteSelected(currentRoute: String?, screenRoute: String, navigationItems: List<Screens>): Boolean {
     if (currentRoute == null) return false
     if (currentRoute == screenRoute) return true
-    return navigationItems.any { it.route == screenRoute } &&
-        currentRoute.startsWith("$screenRoute/")
+    if (navigationItems.any { it.route == screenRoute } && currentRoute.startsWith("$screenRoute/")) return true
+
+    return when (screenRoute) {
+        Screens.Home.route -> currentRoute in HomeChildRoutes ||
+            currentRoute.startsWith("browse/") ||
+            currentRoute.startsWith("youtube_browse/")
+        Screens.Library.route -> currentRoute in LibraryChildRoutes ||
+            currentRoute.startsWith("local_folder/") ||
+            currentRoute.startsWith("local_playlist/") ||
+            currentRoute.startsWith("auto_playlist/") ||
+            currentRoute.startsWith("cache_playlist/") ||
+            currentRoute.startsWith("top_playlist/")
+        else -> false
+    }
 }
 
 /**

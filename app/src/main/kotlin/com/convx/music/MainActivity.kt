@@ -243,6 +243,7 @@ import com.convx.music.playback.MusicService.MusicBinder
 import com.convx.music.playback.PlayerConnection
 import com.convx.music.playback.queues.YouTubeQueue
 import com.convx.music.ui.component.AppFloatingNavBar
+import com.convx.music.ui.component.floatingtabbar.LocalTabBarBackdropFrozen
 import com.convx.music.ui.component.LocalDownloads
 import com.convx.music.ui.component.LocalItemPrefs
 import com.convx.music.ui.component.LocalNavSearchState
@@ -352,7 +353,7 @@ private val themeColorCache = android.util.LruCache<String, androidx.compose.ui.
 // Measured 2026-08-05 on SM-M346B, Home scroll p50: true => record 1.9ms / issue 4.6ms,
 // false => record 16.9ms / issue 19.7ms. The gap is the forced full-tree re-record in
 // LayerBackdropNode.draw(); the fix is to give the subtree RenderNodes, not to drop glass.
-private val TabRootRoutes = setOf(Screens.Home.route, Screens.Library.route, Screens.Settings.route)
+private val TabRootRoutes = setOf(Screens.Home.route, Screens.Songs.route, Screens.Library.route, Screens.Settings.route)
 
 private const val DIAG_DISABLE_BACKDROP = false
 
@@ -1479,13 +1480,9 @@ class MainActivity : ComponentActivity() {
                 // scroll. OR'd in here rather than folded into BackdropFreeze itself,
                 // which many other screens also use for their own local backdrops.
                 val navTransitionFreeze = rememberNavTransitionFreeze(effectiveRoute)
-                // Home/Library/Settings are real NavHost destinations again, so a tab
-                // switch IS a route change and navTransitionFreeze above already covers
-                // it -- the separate pager-motion freeze this used to need doesn't
-                // apply once there is no pager motion to miss.
                 val backdropFrozenProvider = {
                     backdropFreeze.frozen() ||
-                        navTransitionFreeze.frozen()
+                        (navTransitionFreeze.frozen() && effectiveRoute !in TabRootRoutes)
                 }
 
                 // One provider replaces Android's stretch/glow edge effect with the
@@ -1719,34 +1716,7 @@ class MainActivity : ComponentActivity() {
                                                   },
                                                   enabled = if (effectiveRoute == Screens.Home.route) chromeAlpha > 0.1f else true
                                               ) {
-                                                BadgedBox(badge = {}) {
-                                                    if (accountImageUrl != null) {
-                                                        AsyncImage(
-                                                            model = accountImageUrl,
-                                                            contentDescription = stringResource(R.string.account),
-                                                            modifier = Modifier
-                                                                .size(34.dp)
-                                                                .clip(CircleShape)
-                                                        )
-                                                    } else {
-                                                        val composition by rememberLottieComposition(
-                                                            LottieCompositionSpec.RawRes(R.raw.setting)
-                                                        )
-                                                        val progress by animateLottieCompositionAsState(
-                                                            composition = composition,
-                                                            isPlaying = true,
-                                                            iterations = 1,
-                                                            speed = 1.5f
-                                                        )
-
-                                                        LottieAnimation(
-                                                            composition = composition,
-                                                            progress = { progress },
-                                                            modifier = Modifier.size(50.dp),
-                                                            contentScale = ContentScale.Fit
-                                                        )
-                                                    }
-                                                }
+                                                TopBarSettingsButtonContent(accountImageUrl)
                                             }
                                         },
                                         scrollBehavior = topAppBarScrollBehavior,
@@ -1793,9 +1763,22 @@ class MainActivity : ComponentActivity() {
                                     if (screen == Screens.Search) {
                                         enterSearch()
                                     } else if (isSelected) {
-                                        navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
-                                        coroutineScope.launch {
-                                            topAppBarScrollBehavior.state.resetHeightOffset()
+                                        if (effectiveRoute != screen.route) {
+                                            val popped = navController.popBackStack(screen.route, inclusive = false)
+                                            if (!popped) {
+                                                navController.navigate(screen.route) {
+                                                    popUpTo(navController.graph.startDestinationId) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        } else {
+                                            navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
+                                            coroutineScope.launch {
+                                                topAppBarScrollBehavior.state.resetHeightOffset()
+                                            }
                                         }
                                     } else {
                                         val now = SystemClock.elapsedRealtime()
@@ -1817,7 +1800,9 @@ class MainActivity : ComponentActivity() {
                                         if (screen.route != lastNavRoute || now - lastNavTimeMs >= NavDebounceMs) {
                                             lastNavRoute = screen.route
                                             lastNavTimeMs = now
-                                            navTransitionFreeze.markTransitionStarted()
+                                            if (screen.route !in TabRootRoutes) {
+                                                navTransitionFreeze.markTransitionStarted()
+                                            }
                                             // Plain navigate() with the standard multi-back-stack
                                             // pattern, same as every other route.
                                             navController.navigate(screen.route) {
@@ -2009,9 +1994,22 @@ class MainActivity : ComponentActivity() {
                                     if (screen == Screens.Search) {
                                         enterSearch()
                                     } else if (isSelected) {
-                                        navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
-                                        coroutineScope.launch {
-                                            topAppBarScrollBehavior.state.resetHeightOffset()
+                                        if (effectiveRoute != screen.route) {
+                                            val popped = navController.popBackStack(screen.route, inclusive = false)
+                                            if (!popped) {
+                                                navController.navigate(screen.route) {
+                                                    popUpTo(navController.graph.startDestinationId) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        } else {
+                                            navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
+                                            coroutineScope.launch {
+                                                topAppBarScrollBehavior.state.resetHeightOffset()
+                                            }
                                         }
                                     } else {
                                         val now = SystemClock.elapsedRealtime()
@@ -2624,6 +2622,38 @@ class MainActivity : ComponentActivity() {
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             window.navigationBarColor = (if (isDark) Color.Transparent else Color.Black.copy(alpha = 0.2f)).toArgb()
+        }
+    }
+}
+
+@Composable
+private fun TopBarSettingsButtonContent(accountImageUrl: String?) {
+    androidx.compose.material3.BadgedBox(badge = {}) {
+        if (accountImageUrl != null) {
+            AsyncImage(
+                model = accountImageUrl,
+                contentDescription = stringResource(R.string.account),
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+            )
+        } else {
+            val composition by rememberLottieComposition(
+                LottieCompositionSpec.RawRes(R.raw.setting)
+            )
+            val progress by animateLottieCompositionAsState(
+                composition = composition,
+                isPlaying = true,
+                iterations = 1,
+                speed = 1.5f
+            )
+
+            LottieAnimation(
+                composition = composition,
+                progress = { progress },
+                modifier = Modifier.size(50.dp),
+                contentScale = ContentScale.Fit
+            )
         }
     }
 }

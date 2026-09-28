@@ -317,6 +317,15 @@ fun LyricsMenu(
                                             .padding(start = 4.dp)
                                             .size(14.dp),
                                     )
+                                    val firstClose = result.lyrics.indexOf(']')
+                                    if (firstClose > 1) {
+                                        Text(
+                                            text = result.lyrics.substring(1, firstClose),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

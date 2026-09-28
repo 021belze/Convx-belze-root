@@ -176,6 +176,7 @@ import com.convx.music.lyrics.LyricsUtils.isMacedonian
 import com.convx.music.lyrics.LyricsUtils.isRussian
 import com.convx.music.lyrics.LyricsUtils.isSerbian
 import com.convx.music.lyrics.LyricsUtils.isUkrainian
+import com.convx.music.lyrics.LyricsUtils.isValidLrcForDuration
 import com.convx.music.lyrics.LyricsUtils.parseLyrics
 import com.convx.music.lyrics.LyricsUtils.romanizeChinese
 import com.convx.music.lyrics.LyricsUtils.romanizeHindi
@@ -253,11 +254,15 @@ fun Lyrics(
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val rawLyricsEntity by playerConnection.currentLyrics.collectAsState(initial = null)
     val allowedProviders = remember { setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown") }
-    val lyricsEntity = remember(rawLyricsEntity) {
-        if (rawLyricsEntity != null && rawLyricsEntity!!.provider !in allowedProviders) {
+    val lyricsEntity = remember(rawLyricsEntity, mediaMetadata?.duration) {
+        val raw = rawLyricsEntity
+        val dur = mediaMetadata?.duration ?: 0
+        val isInvalidProvider = raw != null && raw.provider !in allowedProviders
+        val isCorrupted = raw != null && dur > 0 && !isValidLrcForDuration(raw.lyrics, dur)
+        if (raw != null && (isInvalidProvider || isCorrupted)) {
             null
         } else {
-            rawLyricsEntity
+            raw
         }
     }
     val currentSong by playerConnection.currentSong.collectAsState(initial = null)
@@ -462,15 +467,19 @@ fun Lyrics(
         }
     }
 
-    // Active fetch trigger: if lyricsEntity is null or provider is invalid, fetch immediately in background
-    LaunchedEffect(mediaMetadata?.id, rawLyricsEntity, showLyrics) {
+    // Active fetch trigger: if lyricsEntity is null or provider is invalid or lyrics corrupted, fetch immediately in background
+    LaunchedEffect(mediaMetadata?.id, mediaMetadata?.duration, rawLyricsEntity, showLyrics) {
         val meta = mediaMetadata
         if (showLyrics && meta != null) {
             val raw = rawLyricsEntity
             val isInvalid = raw != null && raw.provider !in allowedProviders
-            if (raw == null || isInvalid) {
+            val isCorrupted = raw != null && meta.duration > 0 && !isValidLrcForDuration(raw.lyrics, meta.duration)
+            if (raw == null || isInvalid || isCorrupted) {
                 withContext(Dispatchers.IO) {
                     try {
+                        if (isCorrupted && raw != null) {
+                            database.query { delete(raw) }
+                        }
                         val entryPoint = EntryPointAccessors.fromApplication(
                             context.applicationContext,
                             LyricsHelperEntryPoint::class.java
@@ -534,14 +543,12 @@ fun Lyrics(
         }
     }
 
-    // Use Material 3 expressive accents and keep glow/text colors unified
-    val expressiveAccent = when (playerBackground) {
+    // Crisp White text for maximum readability, with vibrant ambient glow accent
+    val glowAccent = when (playerBackground) {
         PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.primary
-        PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT, PlayerBackgroundStyle.GLOW_ANIMATED, PlayerBackgroundStyle.APPLE_MUSIC, PlayerBackgroundStyle.LIVE_MESH, PlayerBackgroundStyle.STATIC, PlayerBackgroundStyle.CUSTOM_GRADIENT -> {
-            // For animated or processed backgrounds, always use light colors regardless of theme
-            Color.White
-        }
+        else -> MaterialTheme.colorScheme.primary.takeIf { it != Color.White } ?: Color(0xFF81D4FA)
     }
+    val expressiveAccent = Color.White
     val textColor = expressiveAccent
 
     var currentLineIndex by remember {
@@ -688,9 +695,7 @@ fun Lyrics(
         }
     }
 
-    suspend fun performSmoothPageScroll(targetIndex: Int, duration: Int = 1500) {
-        if (isAnimating) return // Prevent multiple animations
-        isAnimating = true
+    suspend fun performSmoothPageScroll(targetIndex: Int, duration: Int = 550) {
         try {
             val lookUpIndex = if (isLyricsProviderShown) targetIndex + 1 else targetIndex
             val itemInfo = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lookUpIndex }
@@ -703,15 +708,14 @@ fun Lyrics(
                 if (kotlin.math.abs(offset) > 10) {
                     lazyListState.animateScrollBy(
                         value = offset.toFloat(),
-                        animationSpec = tween(durationMillis = duration)
+                        animationSpec = tween(durationMillis = duration, easing = FastOutSlowInEasing)
                     )
                 }
             } else {
-                // Item is not visible, scroll to it first without animation, then it will be handled in next cycle
+                // Item is not visible, scroll directly to keep up with fast rap transitions
                 lazyListState.scrollToItem(targetIndex)
             }
-        } finally {
-            isAnimating = false
+        } catch (_: Exception) {
         }
     }
     LaunchedEffect(currentLineIndex, lastPreviewTime, initialScrollDone, isAutoScrollEnabled) {
@@ -719,9 +723,9 @@ fun Lyrics(
         if (isAutoScrollEnabled) {
         if((currentLineIndex == 0 && shouldScrollToFirstLine) || !initialScrollDone) {
             shouldScrollToFirstLine = false
-            // Initial scroll to center the first line with medium animation (600ms)
+            // Initial scroll to center the first line with medium animation (550ms)
             val initialCenterIndex = kotlin.math.max(0, currentLineIndex)
-            performSmoothPageScroll(initialCenterIndex, 800) // Initial scroll duration
+            performSmoothPageScroll(initialCenterIndex, 550)
             if(!isAppMinimized) {
                 initialScrollDone = true
             }
@@ -730,13 +734,12 @@ fun Lyrics(
             if (isSeeking) {
                 // Fast scroll for seeking to center the target line (300ms)
                 val seekCenterIndex = kotlin.math.max(0, currentLineIndex)
-                performSmoothPageScroll(seekCenterIndex, 500) // Fast seek duration
+                performSmoothPageScroll(seekCenterIndex, 350)
             } else if ((lastPreviewTime == 0L || currentLineIndex != previousLineIndex) && scrollLyrics) {
-                // Auto-scroll when lyrics settings allow it
+                // Auto-scroll when lyrics settings allow it (550ms responsive timing for rap / high-BPM)
                 if (currentLineIndex != previousLineIndex) {
-                    // Calculate which line should be at the top to center the active group
                     val centerTargetIndex = currentLineIndex
-                    performSmoothPageScroll(centerTargetIndex, 1500) // Auto scroll duration
+                    performSmoothPageScroll(centerTargetIndex, 550)
                 }
             }
         }
@@ -1444,9 +1447,9 @@ fun Lyrics(
                                         else -> FontWeight.Medium
                                     }
                                     val wordShadow = if (isWordActive && glowIntensity > 0.05f) {
-                                        Shadow(color = expressiveAccent.copy(alpha = 0.5f + (0.3f * glowIntensity)), offset = Offset.Zero, blurRadius = 16f + (12f * glowIntensity))
+                                        Shadow(color = glowAccent.copy(alpha = 0.6f + (0.3f * glowIntensity)), offset = Offset.Zero, blurRadius = 16f + (12f * glowIntensity))
                                     } else if (hasWordPassed) {
-                                        Shadow(color = expressiveAccent.copy(alpha = 0.25f), offset = Offset.Zero, blurRadius = 8f)
+                                        Shadow(color = glowAccent.copy(alpha = 0.25f), offset = Offset.Zero, blurRadius = 8f)
                                     } else null
 
                                     withStyle(style = SpanStyle(color = wordColor, fontWeight = wordWeight, shadow = wordShadow)) {
@@ -1614,12 +1617,12 @@ fun Lyrics(
                                     val glowIntensity = smoothProgress * smoothProgress
                                     val wordShadow = when {
                                         isWordActive -> Shadow(
-                                            color = expressiveAccent.copy(alpha = 0.2f + (0.4f * glowIntensity)),
+                                            color = glowAccent.copy(alpha = 0.45f + (0.35f * glowIntensity)),
                                             offset = Offset.Zero,
-                                            blurRadius = 10f + (12f * glowIntensity)
+                                            blurRadius = 12f + (10f * glowIntensity)
                                         )
                                         hasWordPassed && isActiveLine -> Shadow(
-                                            color = expressiveAccent.copy(alpha = 0.2f),
+                                            color = glowAccent.copy(alpha = 0.25f),
                                             offset = Offset.Zero,
                                             blurRadius = 8f
                                         )

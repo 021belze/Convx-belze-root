@@ -434,11 +434,6 @@ fun PlayerV2(
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )
-                                    PlayerV2Canvas(
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
                                     DiyStickerLayer(
                                         layout = diyLayout,
                                         orientation = DiyOrientation.PORTRAIT,
@@ -581,11 +576,6 @@ fun PlayerV2(
                                             contentDescription = "Cover Art",
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
-                                        )
-                                        PlayerV2Canvas(
-                                            mediaMetadata = mediaMetadata,
-                                            isPlaying = isPlaying,
-                                            modifier = Modifier.fillMaxSize()
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(16.dp))
@@ -1071,11 +1061,6 @@ fun PlayerV2(
                                             contentDescription = "Cover Art",
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
-                                        )
-                                        PlayerV2Canvas(
-                                            mediaMetadata = mediaMetadata,
-                                            isPlaying = isPlaying,
-                                            modifier = Modifier.fillMaxSize()
                                         )
                                         DiyStickerLayer(
                                             layout = diyLayout,

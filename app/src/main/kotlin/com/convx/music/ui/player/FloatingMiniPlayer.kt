@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalSharedTransitionApi::class)
+
 /**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
@@ -6,7 +8,15 @@
 package com.convx.music.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -14,7 +24,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -118,6 +131,8 @@ fun FloatingMiniPlayer(
     modifier: Modifier = Modifier,
     onLyricsClick: (() -> Unit)? = null,
     onQueueClick: (() -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    tabBarVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
@@ -305,7 +320,7 @@ fun FloatingMiniPlayer(
         ) {
             if (!tabStyle) {
                 // iOS-style mini bar: unified responsive structure between expanded and inline.
-                // Waveform and Next button smoothly animate out when scrolling minimizes the bar.
+                // Controls smoothly fade with organic scale when scrolling minimizes the bar.
                 val playIconSize = 22.dp
                 val playbackFraction = rememberPlaybackFraction(playerConnection.player, isPlaying)
                 val waveformSeed = remember(mediaMetadata?.id) { mediaMetadata?.id?.hashCode() ?: 0 }
@@ -333,7 +348,9 @@ fun FloatingMiniPlayer(
 
                 Spacer(Modifier.width(8.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         text = mediaMetadata?.title.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
@@ -350,61 +367,74 @@ fun FloatingMiniPlayer(
                     )
                 }
 
-                AnimatedVisibility(
-                    visible = !isInline && miniPlayerWaveform,
-                    enter = fadeIn(tween(140)) + expandHorizontally(tween(160)),
-                    exit = fadeOut(tween(120)) + shrinkHorizontally(tween(140)),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(Modifier.width(6.dp))
-                        ScrollingWaveformSeekBar(
-                            progress = { playbackFraction.value },
-                            onSeek = { frac ->
-                                val duration = playerConnection.player.duration
-                                if (duration > 0) {
-                                    playerConnection.player.seekTo((frac * duration).toLong())
-                                }
-                            },
-                            playedColor = contentColor,
-                            trackColor = contentColor.copy(alpha = 0.3f),
-                            seed = waveformSeed,
-                            visibleBars = 14,
-                            modifier = Modifier
-                                .width(64.dp)
-                                .height(22.dp),
-                        )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.graphicsLayer {
+                        val p = PlayerMorph.progress
+                        if (p > 0f) {
+                            val norm = (p / 0.12f).coerceIn(0f, 1f)
+                            alpha = 1f - norm
+                            val s = 1f - (0.15f * norm)
+                            scaleX = s
+                            scaleY = s
+                        }
                     }
-                }
-
-                Spacer(Modifier.width(6.dp))
-
-                IconButton(
-                    onClick = { playerConnection.player.togglePlayPause() },
-                    modifier = Modifier.size(controlSize),
                 ) {
-                    AnimatedPlayPauseIcon(
-                        isPlaying = isPlaying,
-                        tint = contentColor,
-                        size = playIconSize,
-                    )
-                }
+                    AnimatedVisibility(
+                        visible = !isInline && miniPlayerWaveform,
+                        enter = fadeIn(tween(135, delayMillis = 85, easing = LinearOutSlowInEasing)),
+                        exit = if (PlayerMorph.active) ExitTransition.None else fadeOut(tween(65, easing = FastOutLinearInEasing)),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.width(6.dp))
+                            ScrollingWaveformSeekBar(
+                                progress = { playbackFraction.value },
+                                onSeek = { frac ->
+                                    val duration = playerConnection.player.duration
+                                    if (duration > 0) {
+                                        playerConnection.player.seekTo((frac * duration).toLong())
+                                    }
+                                },
+                                playedColor = contentColor,
+                                trackColor = contentColor.copy(alpha = 0.3f),
+                                seed = waveformSeed,
+                                visibleBars = 14,
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .height(22.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                    }
 
-                AnimatedVisibility(
-                    visible = !isInline,
-                    enter = fadeIn(tween(140)) + expandHorizontally(tween(160)),
-                    exit = fadeOut(tween(120)) + shrinkHorizontally(tween(140)),
-                ) {
                     IconButton(
-                        onClick = { playerConnection.seekToNext() },
-                        enabled = canSkipNext,
+                        onClick = { playerConnection.player.togglePlayPause() },
                         modifier = Modifier.size(controlSize),
                     ) {
-                        PlayerGlyph(
-                            slot = PlayerIconSlot.NEXT,
-                            fallback = R.drawable.fast_forward,
-                            tint = if (canSkipNext) contentColor else contentColor.copy(alpha = 0.4f),
-                            modifier = Modifier.size(playIconSize),
+                        AnimatedPlayPauseIcon(
+                            isPlaying = isPlaying,
+                            tint = contentColor,
+                            size = playIconSize,
                         )
+                    }
+
+                    AnimatedVisibility(
+                        visible = !isInline,
+                        enter = fadeIn(tween(135, delayMillis = 85, easing = LinearOutSlowInEasing)),
+                        exit = if (PlayerMorph.active) ExitTransition.None else fadeOut(tween(65, easing = FastOutLinearInEasing)),
+                    ) {
+                        IconButton(
+                            onClick = { playerConnection.seekToNext() },
+                            enabled = canSkipNext,
+                            modifier = Modifier.size(controlSize),
+                        ) {
+                            PlayerGlyph(
+                                slot = PlayerIconSlot.NEXT,
+                                fallback = R.drawable.fast_forward,
+                                tint = if (canSkipNext) contentColor else contentColor.copy(alpha = 0.4f),
+                                modifier = Modifier.size(playIconSize),
+                            )
+                        }
                     }
                 }
             } else {

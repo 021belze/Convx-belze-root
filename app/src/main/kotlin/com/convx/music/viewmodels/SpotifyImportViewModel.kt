@@ -417,9 +417,9 @@ class SpotifyImportViewModel @Inject constructor(
                             semaphore.withPermit {
                                 var resultMedia: MediaMetadata? = null
                                 try {
-                                    val artist = song.artists.firstOrNull()?.name.orEmpty()
+                                    val allArtists = song.artists.joinToString(", ") { it.name }
                                     val songTitle = song.title
-                                    val query = if (artist.isEmpty()) songTitle else "$artist $songTitle"
+                                    val query = if (allArtists.isEmpty()) songTitle else "$allArtists $songTitle"
 
                                     val searchResult = YouTube.search(
                                         query = query,
@@ -431,19 +431,52 @@ class SpotifyImportViewModel @Inject constructor(
                                         ?.distinctBy { it.id }
                                         .orEmpty()
 
-                                    val best = candidates.maxByOrNull { candidate ->
-                                        SpotifyMapper.matchScore(
-                                            spotifyTitle = song.title,
-                                            spotifyArtist = song.artists.joinToString(" ") { it.name },
-                                            spotifyDurationMs = song.song.duration * 1000,
-                                            candidateTitle = candidate.title,
-                                            candidateArtist = candidate.artists.joinToString(" ") { it.name },
-                                            candidateDurationSec = candidate.duration,
-                                        )
-                                    }
+                                    val best = candidates
+                                        .map { candidate ->
+                                            val score = SpotifyMapper.matchScore(
+                                                spotifyTitle = song.title,
+                                                spotifyArtist = song.artists.joinToString(" ") { it.name },
+                                                spotifyDurationMs = song.song.duration * 1000,
+                                                candidateTitle = candidate.title,
+                                                candidateArtist = candidate.artists.joinToString(" ") { it.name },
+                                                candidateDurationSec = candidate.duration,
+                                            )
+                                            candidate to score
+                                        }
+                                        .filter { (_, score) -> score >= SpotifyMapper.minMatchThreshold() }
+                                        .maxByOrNull { (_, score) -> score }
+                                        ?.first
 
                                     if (best != null) {
                                         resultMedia = best.toMediaMetadata()
+                                    } else {
+                                        // Fallback search with song title if full query missed or scored too low
+                                        val fallbackResult = YouTube.search(
+                                            query = songTitle.take(80),
+                                            filter = YouTube.SearchFilter.FILTER_SONG,
+                                        ).getOrNull()
+
+                                        val fallbackBest = fallbackResult?.items
+                                            ?.filterIsInstance<SongItem>()
+                                            ?.distinctBy { it.id }
+                                            ?.map { candidate ->
+                                                val score = SpotifyMapper.matchScore(
+                                                    spotifyTitle = song.title,
+                                                    spotifyArtist = song.artists.joinToString(" ") { it.name },
+                                                    spotifyDurationMs = song.song.duration * 1000,
+                                                    candidateTitle = candidate.title,
+                                                    candidateArtist = candidate.artists.joinToString(" ") { it.name },
+                                                    candidateDurationSec = candidate.duration,
+                                                )
+                                                candidate to score
+                                            }
+                                            ?.filter { (_, score) -> score >= 0.50 }
+                                            ?.maxByOrNull { (_, score) -> score }
+                                            ?.first
+
+                                        if (fallbackBest != null) {
+                                            resultMedia = fallbackBest.toMediaMetadata()
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     reportException(e)
