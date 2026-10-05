@@ -625,4 +625,7 @@
     <string name="enable">Aktifkan</string>
     <string name="prevent_duplicate_tracks_in_queue">Cegah lagu yang sama di antrean</string>
     <string name="prevent_duplicate_tracks_in_queue_desc">Saat menambahkan lagu ke antrean, hapus kemunculannya sebelumnya jika lagu tersebut sudah ada dalam antrean</string>
+    <string name="karaoke_already_active">Lirik karaoke tersinkronisasi sudah aktif</string>
+    <string name="searching_karaoke_lyrics">Mencari lirik karaoke tersinkronisasi…</string>
+    <string name="convx_default">Default Convx</string>
 </resources>

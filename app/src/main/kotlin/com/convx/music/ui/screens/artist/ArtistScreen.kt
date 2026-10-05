@@ -525,38 +525,6 @@ fun ArtistScreen(
                         }
 
                         // Artist Name and Controls Section - positioned at bottom of image
-
-                        if (tabView) {
-                            HeroCardHeader(
-                                artworkUrl = thumbnail,
-                                circular = true,
-                                title = {
-                                    Text(
-                                        text = artistName?.titlecaseWords() ?: "Unknown",
-                                        style = MaterialTheme.typography.headlineLarge,
-                                        fontFamily = rememberCustomArtistFontFamily() ?: rememberBrandFontFamily(),
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = LocalAccentTextColor.current,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontSize = 42.sp,
-                                    )
-                                },
-                                subtitle = artistPage?.subscriberCountText?.takeIf {
-                                    showArtistSubscriberCount
-                                }?.let { subscribers ->
-                                    {
-                                        Text(
-                                            text = subscribers,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                },
-                            )
-                        }
-
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -570,10 +538,40 @@ fun ArtistScreen(
                                             }
                                         }
                                     } else {
-                                        16.dp
+                                        0.dp
                                     }
                                 )
                         ) {
+                            if (tabView) {
+                                HeroCardHeader(
+                                    artworkUrl = thumbnail,
+                                    circular = true,
+                                    title = {
+                                        Text(
+                                            text = artistName?.titlecaseWords() ?: "Unknown",
+                                            style = MaterialTheme.typography.headlineLarge,
+                                            fontFamily = rememberCustomArtistFontFamily() ?: rememberBrandFontFamily(),
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = LocalAccentTextColor.current,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontSize = 42.sp,
+                                        )
+                                    },
+                                    subtitle = artistPage?.subscriberCountText?.takeIf {
+                                        showArtistSubscriberCount
+                                    }?.let { subscribers ->
+                                        {
+                                            Text(
+                                                text = subscribers,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()

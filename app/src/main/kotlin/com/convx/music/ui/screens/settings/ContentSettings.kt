@@ -188,6 +188,7 @@ import com.convx.music.constants.ShowWrappedCardKey
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.TopSize
 import com.convx.music.ui.utils.appTopBarWindowInsets
+import com.convx.music.ui.component.DefaultDialog
 import com.convx.music.ui.component.EnumDialog
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.component.IconButton
@@ -471,13 +472,20 @@ fun ContentSettings(
     var showAppLanguageDialog by rememberSaveable {
         mutableStateOf(false)
     }
+    var showRestartDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     if (showAppLanguageDialog) {
         EnumDialog(
             onDismiss = { showAppLanguageDialog = false },
             onSelect = {
+                val changed = it != appLanguage
                 onAppLanguageChange(it)
                 showAppLanguageDialog = false
+                if (changed && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                    showRestartDialog = true
+                }
             },
             title = stringResource(R.string.app_language),
             current = appLanguage,
@@ -486,6 +494,31 @@ fun ContentSettings(
                 LanguageCodeToName.getOrElse(it) { stringResource(R.string.system_default) }
             }
         )
+    }
+
+    if (showRestartDialog) {
+        DefaultDialog(
+            onDismiss = { showRestartDialog = false },
+            buttons = {
+                TextButton(onClick = { showRestartDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+                TextButton(onClick = {
+                    showRestartDialog = false
+                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    context.startActivity(intent)
+                    Runtime.getRuntime().exit(0)
+                }) {
+                    Text(stringResource(R.string.restart))
+                }
+            }
+        ) {
+            Text(
+                text = stringResource(R.string.restart_to_take_effect),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 
     var showProviderPriorityDialog by rememberSaveable { mutableStateOf(false) }

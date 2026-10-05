@@ -34,11 +34,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
 import com.convx.music.ui.component.GlassSwitchCompat as Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -169,12 +172,6 @@ fun PlayerThemeScreen(
     //     PlayerLayoutRegistry.deserializeHiddenSlots(hiddenSlotsRaw)
     // }
 
-    // Apple Music draws its own square artwork treatment, so the shape presets
-    // have nothing to act on while it is selected.
-    val artworkLocked = background == PlayerBackgroundStyle.APPLE_MUSIC
-    // V17 uses its own thumbnail layout — VINYL and CLOVER don't apply.
-    val v17Active = useAppleMusicPlayer
-
     // Preview the song that is actually playing; fall back to the app icon.
     val playerConnection = LocalPlayerConnection.current
     val mediaMetadata by remember(playerConnection) {
@@ -188,12 +185,8 @@ fun PlayerThemeScreen(
             .verticalScroll(rememberScrollState()),
     ) {
         SectionTitle(stringResource(R.string.player_theme_artwork))
-        if (artworkLocked || v17Active) {
-            LockedNote(stringResource(if (v17Active) R.string.player_theme_artwork_locked_v17 else R.string.player_theme_artwork_locked))
-        }
         PresetRow {
             PlayerArtworkStyle.entries.forEach { style ->
-                val disabledByV17 = v17Active && style != PlayerArtworkStyle.CARD
                 PresetCard(
                     label = when (style) {
                         PlayerArtworkStyle.CARD -> stringResource(R.string.player_theme_card)
@@ -201,7 +194,7 @@ fun PlayerThemeScreen(
                         PlayerArtworkStyle.CLOVER -> stringResource(R.string.player_theme_clover)
                     },
                     selected = artworkStyle == style,
-                    enabled = !artworkLocked && !disabledByV17,
+                    enabled = true,
                     onClick = { onArtworkStyleChange(style) },
                 ) {
                     PlayerPreview(
@@ -222,11 +215,10 @@ fun PlayerThemeScreen(
             PlayerBackgroundStyle.entries.filter {
                 it != PlayerBackgroundStyle.BLUR || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             }.forEach { style ->
-                val disabledByV17 = v17Active && style == PlayerBackgroundStyle.APPLE_MUSIC
                 PresetCard(
                     label = backgroundLabel(style),
                     selected = background == style,
-                    enabled = !disabledByV17,
+                    enabled = true,
                     onClick = { onBackgroundChange(style) },
                 ) {
                     PlayerPreview(
@@ -242,12 +234,12 @@ fun PlayerThemeScreen(
             }
         }
 
-        SectionTitle(stringResource(R.string.apple_music_player_v17))
+        SectionTitle(stringResource(R.string.apple_music_player_v17_options))
         PresetRow {
             PresetCard(
                 label = stringResource(R.string.apple_music_player_v17),
                 selected = useAppleMusicPlayer,
-                onClick = { onUseAppleMusicPlayerChange(!useAppleMusicPlayer) },
+                onClick = { onUseAppleMusicPlayerChange(true) },
             ) {
                 Box(
                     modifier = Modifier
@@ -257,6 +249,24 @@ fun PlayerThemeScreen(
                 ) {
                     androidx.compose.foundation.Image(
                         painter = painterResource(R.drawable.convx_logo),
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+            PresetCard(
+                label = stringResource(R.string.classic_player),
+                selected = !useAppleMusicPlayer,
+                onClick = { onUseAppleMusicPlayerChange(false) },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(R.drawable.album),
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                     )
@@ -797,6 +807,7 @@ private fun PresetCard(
 }
 
 /** Miniature of the real player: background wash + artwork shape + seek bar. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PlayerPreview(
     artworkStyle: PlayerArtworkStyle,
@@ -839,13 +850,10 @@ private fun PlayerPreview(
             .padding(12.dp),
     ) {
         Spacer(Modifier.height(8.dp))
-        // Real player: APPLE_MUSIC draws full-bleed unclipped artwork in portrait, ignoring the
-        // artwork-style shape entirely — a VINYL/CLOVER style must not preview as a circle here.
-        val previewShape = if (background == PlayerBackgroundStyle.APPLE_MUSIC) {
-            RoundedCornerShape(0.dp)
-        } else when (artworkStyle) {
+        val previewShape = when (artworkStyle) {
             PlayerArtworkStyle.CARD -> ContinuousRoundedRectangle(10.dp)
-            else -> CircleShape
+            PlayerArtworkStyle.VINYL -> CircleShape
+            PlayerArtworkStyle.CLOVER -> MaterialShapes.Clover8Leaf.toShape()
         }
         Box(
             modifier = Modifier
@@ -862,7 +870,7 @@ private fun PlayerPreview(
                 error = painterResource(R.drawable.convx_logo),
                 modifier = Modifier.fillMaxSize(),
             )
-            if (previewShape == CircleShape && artworkStyle == PlayerArtworkStyle.VINYL) {
+            if (artworkStyle == PlayerArtworkStyle.VINYL) {
                 Canvas(Modifier.fillMaxSize()) {
                     val r = size.minDimension / 2f
                     drawCircle(

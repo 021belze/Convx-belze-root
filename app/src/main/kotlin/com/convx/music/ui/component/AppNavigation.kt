@@ -67,9 +67,6 @@ private val HomeChildRoutes = setOf(
     "mood_and_genres",
     "new_release",
     "charts_screen",
-    "history",
-    "stats",
-    "account"
 )
 
 private val LibraryChildRoutes = setOf(
@@ -85,7 +82,10 @@ internal fun isRouteSelected(currentRoute: String?, screenRoute: String, navigat
     return when (screenRoute) {
         Screens.Home.route -> currentRoute in HomeChildRoutes ||
             currentRoute.startsWith("browse/") ||
-            currentRoute.startsWith("youtube_browse/")
+            currentRoute.startsWith("youtube_browse/") ||
+            currentRoute.startsWith("artist/") ||
+            currentRoute.startsWith("album/") ||
+            currentRoute.startsWith("online_playlist/")
         Screens.Library.route -> currentRoute in LibraryChildRoutes ||
             currentRoute.startsWith("local_folder/") ||
             currentRoute.startsWith("local_playlist/") ||

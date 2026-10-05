@@ -641,10 +641,22 @@ private fun NavGraphBuilder.mainTabComposable(
     content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
 ) = composable(
     route = route,
-    enterTransition = { fadeIn(tween(190, easing = FastOutSlowInEasing)) },
-    exitTransition = { fadeOut(tween(140, easing = FastOutSlowInEasing)) },
-    popEnterTransition = { fadeIn(tween(190, easing = FastOutSlowInEasing)) },
-    popExitTransition = { fadeOut(tween(140, easing = FastOutSlowInEasing)) },
+    enterTransition = {
+        fadeIn(tween(160, easing = FastOutSlowInEasing)) +
+            slideInHorizontally(tween(200, easing = FastOutSlowInEasing)) { it / 8 }
+    },
+    exitTransition = {
+        fadeOut(tween(120, easing = FastOutSlowInEasing)) +
+            slideOutHorizontally(tween(160, easing = FastOutSlowInEasing)) { -it / 8 }
+    },
+    popEnterTransition = {
+        fadeIn(tween(160, easing = FastOutSlowInEasing)) +
+            slideInHorizontally(tween(200, easing = FastOutSlowInEasing)) { -it / 8 }
+    },
+    popExitTransition = {
+        fadeOut(tween(120, easing = FastOutSlowInEasing)) +
+            slideOutHorizontally(tween(160, easing = FastOutSlowInEasing)) { it / 8 }
+    },
 ) { entry ->
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
         Box(

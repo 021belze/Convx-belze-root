@@ -1,6 +1,8 @@
 package com.convx.music.ui.component
 
 import android.content.Context
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -18,8 +20,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -217,16 +224,29 @@ fun rememberHeroTint(url: String?): Color {
 
     // Black until the artwork color is extracted (no accent flash); seeded from the
     // cache so a revisited image shows its tint at once.
-    var tint by remember(url) { mutableStateOf(url?.let { heroTintCache.get(it) } ?: Color.Black) }
+    var tint by remember { mutableStateOf(url?.let { heroTintCache.get(it) } ?: Color.Black) }
 
     LaunchedEffect(url) {
         // No early return on a cache hit. Extraction can already be in flight from
         // prewarmHeroTint, and bailing out because "someone is handling it" left the
         // tint stuck on its pending black forever.
-        tint = (url?.let { heroTintOf(context, it) }) ?: fallbackTint
+        if (url != null) {
+            val cached = heroTintCache.get(url)
+            if (cached != null) {
+                tint = cached
+            }
+            val extracted = heroTintOf(context, url)
+            tint = extracted ?: fallbackTint
+        } else {
+            tint = Color.Black
+        }
     }
 
-    val animatedTint = tint
+    val animatedTint by animateColorAsState(
+        targetValue = tint,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "heroTintTransition"
+    )
     // Root-cause fix, not per-screen: every hero-tinted screen (Artist, Album,
     // Playlist, Search, ...) reads its background straight off this value, but
     // only HeroBackground's own separate PureBlackHeroBackgroundKey check
@@ -521,16 +541,21 @@ fun HeroCardHeader(
     } else {
         ContinuousRoundedRectangle(16.dp)
     }
+    val configuration = LocalConfiguration.current
+    val effectiveCardSize = if (cardSize == HeroCardSize && configuration.screenHeightDp < 500) 130.dp else cardSize
+    val topClearance = if (configuration.screenHeightDp < 500) 48.dp else HeroBackButtonClearance
+
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
             // Top clearance drops the card below the floating Back button.
-            .padding(start = 24.dp, end = 24.dp, top = HeroBackButtonClearance, bottom = 16.dp),
+            .padding(start = 24.dp, end = 24.dp, top = topClearance, bottom = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
-                .size(cardSize)
+                .size(effectiveCardSize)
                 .shadow(elevation = 12.dp, shape = shape)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),

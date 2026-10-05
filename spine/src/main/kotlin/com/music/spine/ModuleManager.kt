@@ -26,15 +26,16 @@ class ModuleManager {
         HttpClient(OkHttp) {
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) {
-                requestTimeoutMillis = 15_000
-                connectTimeoutMillis = 10_000
-                socketTimeoutMillis = 15_000
+                requestTimeoutMillis = 6_000
+                connectTimeoutMillis = 4_000
+                socketTimeoutMillis = 6_000
             }
             expectSuccess = false
         }
     }
 
-    private val loadedModules = mutableMapOf<String, LoadedModule>()
+    private val loadedModules = java.util.concurrent.ConcurrentHashMap<String, LoadedModule>()
+    private val indexCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<SpineModule>>>()
 
     data class LoadedModule(
         val module: SpineModule,
@@ -42,7 +43,14 @@ class ModuleManager {
         val baseUrl: String,
     )
 
-    suspend fun fetchIndex(sourceUrl: String): Result<List<SpineModule>> = withContext(Dispatchers.IO) {
+    suspend fun fetchIndex(sourceUrl: String, forceRefresh: Boolean = false): Result<List<SpineModule>> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val cached = indexCache[sourceUrl]
+        if (!forceRefresh && cached != null && (now - cached.first) < 30 * 60 * 1000L) {
+            Log.d(TAG, "▶ fetchIndex($sourceUrl) — CACHE HIT (${cached.second.size} modules)")
+            return@withContext Result.success(cached.second)
+        }
+
         Log.d(TAG, "▶ fetchIndex($sourceUrl)")
         runCatching {
             val resp = client.get(sourceUrl)
@@ -60,6 +68,7 @@ class ModuleManager {
             for (m in modules) {
                 Log.d(TAG, "    • [${m.id}] ${m.name} v${m.version} tags=${m.tags} download=${m.download}")
             }
+            indexCache[sourceUrl] = Pair(now, modules)
             modules
         }.onFailure {
             Log.e(TAG, "  ✗ fetchIndex FAILED for $sourceUrl: ${it.message}", it)
@@ -71,6 +80,12 @@ class ModuleManager {
         if (cached != null) {
             Log.d(TAG, "▶ loadModule(${module.id}) — CACHE HIT")
             return@withContext Result.success(cached)
+        }
+
+        if (module.isEncryptedBinary) {
+            val msg = "Module ${module.id} uses encrypted .8spine binary format (not raw JavaScript). QuickJS cannot execute this module."
+            Log.w(TAG, "▶ loadModule(${module.id}) rejected: $msg")
+            return@withContext Result.failure(IllegalArgumentException(msg))
         }
 
         Log.d(TAG, "▶ loadModule(${module.id}) download=${module.download}")
@@ -91,6 +106,9 @@ class ModuleManager {
                 throw Exception("HTTP ${resp.status.value} downloading module ${module.id}")
             }
             val jsCode = resp.bodyAsText()
+            if (jsCode.trimStart().startsWith("8SM1") || jsCode.trimStart().startsWith("8SM")) {
+                throw IllegalArgumentException("Module ${module.id} is an encrypted .8spine container (8SM1) which cannot be parsed by QuickJS")
+            }
             val baseUrl = downloadUrl.substringBeforeLast("/")
 
             QuickJsExecutor.loadModule(module.id, jsCode, baseUrl).getOrThrow()
@@ -165,7 +183,7 @@ class ModuleManager {
             try {
                 val parsed = json.decodeFromString<ModuleStreamResponse>(result)
                 Log.d(TAG, "  ✓ Parsed stream response:")
-                Log.d(TAG, "    streamUrl: ${parsed.streamUrl?.take(200)}")
+                Log.d(TAG, "    streamUrl: ${parsed.streamUrl.take(200)}")
                 Log.d(TAG, "    track?.id: ${parsed.track?.id}")
                 Log.d(TAG, "    track?.audioQuality: ${parsed.track?.audioQuality}")
                 Log.d(TAG, "    track?.mimeType: ${parsed.track?.mimeType}")
@@ -196,5 +214,6 @@ class ModuleManager {
 
     companion object {
         private const val TAG = "SpineDebug"
+        val default: ModuleManager by lazy { ModuleManager() }
     }
 }

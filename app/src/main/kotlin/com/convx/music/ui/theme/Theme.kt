@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.palette.graphics.Palette
+import com.convx.music.constants.AppBackgroundColorKey
 import com.convx.music.constants.AppFont
 import com.convx.music.constants.AppTextColorKey
 import com.convx.music.constants.SelectedFontKey
@@ -29,6 +30,24 @@ import com.materialkolor.rememberDynamicColorScheme
 import com.materialkolor.score.Score
 
 val DefaultThemeColor = AppleTokens.AccentRed
+
+/**
+ * Convx Signature Presets for Dark, Light, and Pure Black themes.
+ * Provides the highest contrast, eye comfort, and sleek aesthetics.
+ */
+object ConvxThemePresets {
+    // Light Mode: sleek, eye-comfort Apple Music style
+    val LightBackground = Color(0xFFF6F7F9)
+    val LightText = Color(0xFF1C1C1E)
+
+    // Dark Mode: modern dark slate, ultra clean, high contrast
+    val DarkBackground = Color(0xFF121214)
+    val DarkText = Color(0xFFFFFFFF)
+
+    // Pure Black (OLED): absolute pitch black with crisp white
+    val PureBlackBackground = Color(0xFF000000)
+    val PureBlackText = Color(0xFFFFFFFF)
+}
 
 /**
  * The user's chosen accent color, provided app-wide. ONLY the nav bar uses this
@@ -89,11 +108,33 @@ fun vivimusicTheme(
     )
 
     val (appTextColorInt) = rememberPreference(AppTextColorKey, defaultValue = 0)
+    val (appBackgroundColorInt) = rememberPreference(AppBackgroundColorKey, defaultValue = 0)
 
-    val colorScheme = remember(baseColorScheme, pureBlack, darkTheme, themeColor, appTextColorInt) {
+    val colorScheme = remember(baseColorScheme, pureBlack, darkTheme, themeColor, appTextColorInt, appBackgroundColorInt) {
         val withApple = if (darkTheme) baseColorScheme.appleSurfaces() else baseColorScheme
         val withBlack = if (darkTheme && pureBlack) withApple.pureBlack(true) else withApple
-        val withAccentText = withBlack.accentText(themeColor, darkTheme)
+        val withBg = if (appBackgroundColorInt != 0) {
+            val bg = Color(appBackgroundColorInt)
+            val isBgLight = bg.luminance() > 0.5f
+            val container = if (isBgLight) {
+                androidx.compose.ui.graphics.lerp(bg, Color.Black, 0.05f)
+            } else {
+                androidx.compose.ui.graphics.lerp(bg, Color.White, 0.07f)
+            }
+            val containerHigh = if (isBgLight) {
+                androidx.compose.ui.graphics.lerp(bg, Color.Black, 0.09f)
+            } else {
+                androidx.compose.ui.graphics.lerp(bg, Color.White, 0.12f)
+            }
+            withBlack.copy(
+                surface = bg,
+                background = bg,
+                surfaceContainer = container,
+                surfaceContainerLow = bg,
+                surfaceContainerHigh = containerHigh,
+            )
+        } else withBlack
+        val withAccentText = withBg.accentText(themeColor, darkTheme)
         // Theme screen's explicit text color, when set, replaces the accent-tinted
         // text roles everywhere they're read from MaterialTheme.colorScheme — this
         // is the single root override every screen's default Text() picks up, same

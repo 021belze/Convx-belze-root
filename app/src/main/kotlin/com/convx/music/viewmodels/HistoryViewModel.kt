@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -38,6 +38,11 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
+import kotlinx.coroutines.flow.first
+import com.convx.music.models.toMediaMetadata
+import com.convx.music.db.entities.Event
+import java.time.LocalDateTime
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HistoryViewModel
@@ -47,6 +52,7 @@ constructor(
     val database: MusicDatabase,
 ) : ViewModel() {
     var historySource = MutableStateFlow(HistorySource.LOCAL)
+    val isSyncing = MutableStateFlow(false)
 
     private val today = LocalDate.now()
     private val thisMonday = today.with(DayOfWeek.MONDAY)
@@ -147,27 +153,79 @@ constructor(
 
 
     init {
-        fetchRemoteHistory()
-        // Auto-clear remote history when user logs out
+        // Observe login state: auto-switch to REMOTE and auto-sync when logged in
         viewModelScope.launch(Dispatchers.IO) {
             context.dataStore.data
                 .map { it[InnerTubeCookieKey] ?: "" }
                 .distinctUntilChanged()
                 .collect { cookie ->
-                    if ("SAPISID" !in parseCookieString(cookie)) {
+                    val loggedIn = "SAPISID" in parseCookieString(cookie)
+                    if (!loggedIn) {
                         historyPage.value = null
                         historySource.value = HistorySource.LOCAL
+                    } else {
+                        historySource.value = HistorySource.REMOTE
+                        fetchRemoteHistory(syncToDatabase = true)
                     }
                 }
         }
     }
 
-    fun fetchRemoteHistory() {
+    fun fetchRemoteHistory(syncToDatabase: Boolean = true) {
         viewModelScope.launch(Dispatchers.IO) {
-            YouTube.musicHistory().onSuccess {
-                historyPage.value = it
-            }.onFailure {
-                reportException(it)
+            isSyncing.value = true
+            try {
+                YouTube.musicHistory().onSuccess { page ->
+                    historyPage.value = page
+                    if (syncToDatabase) {
+                        syncRemoteHistoryToDatabase(page)
+                    }
+                }.onFailure {
+                    reportException(it)
+                }
+            } finally {
+                isSyncing.value = false
+            }
+        }
+    }
+
+    private suspend fun syncRemoteHistoryToDatabase(page: HistoryPage) {
+        val sections = page.sections ?: return
+        val now = LocalDateTime.now()
+        val existingEvents = try {
+            database.events().first()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val existingKeys = existingEvents.map { "${it.event.songId}_${it.event.timestamp.toLocalDate()}" }.toMutableSet()
+
+        database.transaction {
+            sections.forEachIndexed { sectionIndex, section ->
+                val baseTime = when {
+                    section.title.contains("today", ignoreCase = true) || section.title.contains("hari ini", ignoreCase = true) -> now
+                    section.title.contains("yesterday", ignoreCase = true) || section.title.contains("kemarin", ignoreCase = true) -> now.minusDays(1)
+                    section.title.contains("week", ignoreCase = true) || section.title.contains("minggu", ignoreCase = true) -> now.minusDays(3 + sectionIndex.toLong())
+                    else -> now.minusDays(7 + sectionIndex.toLong() * 2)
+                }
+
+                section.songs.forEachIndexed { songIndex, song ->
+                    val timestamp = baseTime.minusMinutes(songIndex.toLong() * 5)
+                    val key = "${song.id}_${timestamp.toLocalDate()}"
+                    if (key !in existingKeys) {
+                        try {
+                            insert(song.toMediaMetadata())
+                            insert(
+                                Event(
+                                    songId = song.id,
+                                    timestamp = timestamp,
+                                    playTime = (song.duration ?: 180) * 1000L
+                                )
+                            )
+                            existingKeys.add(key)
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
             }
         }
     }

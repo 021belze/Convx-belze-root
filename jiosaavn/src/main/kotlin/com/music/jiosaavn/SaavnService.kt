@@ -101,7 +101,7 @@ data class SaavnSongResponse(
 object SaavnService {
 
     private const val TAG = "SaavnService"
-    private const val BASE_URL = "https://meloapi.vercel.app/api/"
+    private const val BASE_URL = "https://jiosaavn-api-belze.onrender.com/api/"
 
     private val json = Json {
         isLenient         = true
@@ -134,11 +134,11 @@ object SaavnService {
      * @return Result wrapping a list of matched [SaavnSong]s, or failure if the
      *         request fails or returns no results.
      */
-    suspend fun searchSongs(query: String): Result<List<SaavnSong>> = runCatching {
-        Log.d(TAG, "searchSongs: query=\"$query\"")
+    suspend fun searchSongs(query: String, limit: Int = 10): Result<List<SaavnSong>> = runCatching {
+        Log.d(TAG, "searchSongs: query=\"$query\", limit=$limit")
         val response = client.get("search/songs") {
             parameter("query", query)
-            parameter("limit", 5)   // fetch top-5 candidates; we only use #1
+            parameter("limit", limit)
         }
 
         Log.d(TAG, "searchSongs: HTTP response status: ${response.status}")

@@ -158,8 +158,10 @@ inline fun ListItem(
     shape: Shape = RectangleShape,
     drawHighlight: Boolean = true,
     flat: Boolean = false,
+    titleColor: Color? = null,
+    subtitleColor: Color? = null,
 ) {
-    val onSurface = LocalContentColor.current
+    val onSurface = titleColor ?: LocalContentColor.current
     Column(modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -223,10 +225,9 @@ inline fun ListItem(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Metadata is a fixed grey, not an alpha of the title colour:
-                        // over artwork-tinted screens an alpha step reads as a faded
-                        // version of the tint rather than as a second tier.
-                        CompositionLocalProvider(LocalContentColor provides AppleTokens.Metadata) {
+                        // Metadata text color: uses subtitleColor when explicitly provided
+                        // (e.g. over dark player queue backdrops), falling back to AppleTokens.Metadata.
+                        CompositionLocalProvider(LocalContentColor provides (subtitleColor ?: AppleTokens.Metadata)) {
                             subtitle()
                         }
                     }
@@ -260,17 +261,18 @@ fun ListItem(
     shape: Shape = RectangleShape,
     drawHighlight: Boolean = true,
     flat: Boolean = false,
+    titleColor: Color? = null,
+    subtitleColor: Color? = null,
 ) = ListItem(
     title = title,
     subtitle = {
         badges()
         if (subtitle != null) {
-            // Colour comes from the 0.6-alpha LocalContentColor the base
-            // ListItem already provides around its subtitle slot.
             Text(
                 text = subtitle,
                 fontSize = AppleTokens.ItemSubtitle,
                 lineHeight = AppleTokens.ItemSubtitleLineHeight,
+                color = subtitleColor ?: LocalContentColor.current,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -283,7 +285,9 @@ fun ListItem(
     isActive = isActive,
     shape = shape,
     drawHighlight = drawHighlight,
-    flat = flat
+    flat = flat,
+    titleColor = titleColor,
+    subtitleColor = subtitleColor,
 )
 
 // merge badges and subtitle text and pass to basic list item
@@ -300,17 +304,19 @@ fun ListItem(
     shape: Shape = RectangleShape,
     drawHighlight: Boolean = true,
     flat: Boolean = false,
+    titleColor: Color? = null,
+    subtitleColor: Color? = null,
 ) = ListItem(
     title = title,
     subtitle = {
         badges()
 
         if (!subtitle.isNullOrEmpty()) {
-            // Colour inherited — see the AnnotatedString overload above.
             Text(
                 text = subtitle,
                 fontSize = AppleTokens.ItemSubtitle,
                 lineHeight = AppleTokens.ItemSubtitleLineHeight,
+                color = subtitleColor ?: LocalContentColor.current,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -323,7 +329,9 @@ fun ListItem(
     isActive = isActive,
     shape = shape,
     drawHighlight = drawHighlight,
-    flat = flat
+    flat = flat,
+    titleColor = titleColor,
+    subtitleColor = subtitleColor,
 )
 
 @Composable
@@ -991,7 +999,7 @@ fun PlaylistListItem(
                     .size(ListThumbnailSize)
                     .clip(ThumbnailRoundedShape),
             )
-        } else if (showIconOnly) {
+        } else if (showIconOnly && playlist.thumbnails.isEmpty()) {
             Box(
                 modifier = Modifier
                     .size(ListThumbnailSize)
@@ -1125,7 +1133,7 @@ fun PlaylistGridItem(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else if (showIconOnly) {
+        } else if (showIconOnly && playlist.thumbnails.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1175,6 +1183,8 @@ fun MediaMetadataListItem(
     isPlaying: Boolean = false,
     shape: Shape = RectangleShape,
     flat: Boolean = false,
+    titleColor: Color? = null,
+    subtitleColor: Color? = null,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
     ListItem(
@@ -1214,7 +1224,9 @@ fun MediaMetadataListItem(
         modifier = modifier,
         isActive = isActive,
         shape = shape,
-        flat = flat
+        flat = flat,
+        titleColor = titleColor,
+        subtitleColor = subtitleColor,
     )
 }
 

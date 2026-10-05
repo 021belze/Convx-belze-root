@@ -324,7 +324,12 @@ fun PlayerSettings(
         )
     }
 
-
+    LaunchedEffect(crossfadeEnabled) {
+        if (!crossfadeEnabled && autoDjMixingEnabled) onAutoDjMixingEnabledChange(false)
+    }
+    LaunchedEffect(autoDjMixingEnabled) {
+        if (!autoDjMixingEnabled && creativeTransitionsEnabled) onCreativeTransitionsEnabledChange(false)
+    }
 
     androidx.compose.foundation.lazy.LazyColumn(
         Modifier
@@ -475,12 +480,6 @@ fun PlayerSettings(
                 // window); Creative Transitions needs Auto-DJ Mixing on (its effects run
                 // inside a DJ-mixed transition). Turning the dependency off cascades down
                 // rather than leaving a switch on that can no longer do anything.
-                LaunchedEffect(crossfadeEnabled) {
-                    if (!crossfadeEnabled && autoDjMixingEnabled) onAutoDjMixingEnabledChange(false)
-                }
-                LaunchedEffect(autoDjMixingEnabled) {
-                    if (!autoDjMixingEnabled && creativeTransitionsEnabled) onCreativeTransitionsEnabledChange(false)
-                }
                 add(Material3SettingsItem(
                     icon = painterResource(R.drawable.equalizer),
                     title = { Text(stringResource(R.string.auto_dj_mixing)) },
@@ -646,7 +645,7 @@ fun PlayerSettings(
                     title = { Text(stringResource(R.string.history_duration)) },
                     description = {
                         Column {
-                            Text(historyDuration.roundToInt().toString())
+                            Text(pluralStringResource(R.plurals.seconds, historyDuration.roundToInt(), historyDuration.roundToInt()))
                             Slider(
                                 value = historyDuration,
                                 onValueChange = onHistoryDurationChange,

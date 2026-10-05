@@ -376,6 +376,27 @@ fun AutoPlaylistScreen(
                                 }
                             }
                         }
+                        if (viewModel.playlist == "uploaded") {
+                            item(key = "uploaded_sync_action") {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    val isRefreshing by viewModel.isRefreshing.collectAsState()
+                                    if (isRefreshing) {
+                                        CircularProgressIndicator()
+                                    } else {
+                                        Button(
+                                            onClick = { viewModel.refresh() },
+                                        ) {
+                                            Text(stringResource(R.string.action_sync))
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     if (filteredSongs.isEmpty() && isSearching) {

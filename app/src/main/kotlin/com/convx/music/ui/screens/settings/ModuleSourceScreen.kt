@@ -82,7 +82,7 @@ fun ModuleSourceScreen(
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     val scope = rememberCoroutineScope()
-    val moduleManager = remember { ModuleManager() }
+    val moduleManager = remember { ModuleManager.default }
 
     val (sourcesJson, onSourcesJsonChange) = rememberPreference(ModuleSourcesKey, defaultValue = "[]")
     val (enabledJson, onEnabledJsonChange) = rememberPreference(EnabledModulesKey, defaultValue = "[]")
@@ -266,7 +266,7 @@ fun ModuleSourceScreen(
                                 val allModules = mutableListOf<SpineModule>()
                                 for (url in sourceUrls) {
                                     loadingSource = url
-                                    moduleManager.fetchIndex(url).onSuccess { allModules.addAll(it) }
+                                    moduleManager.fetchIndex(url, forceRefresh = true).onSuccess { allModules.addAll(it) }
                                 }
                                 onFetchedModulesJsonChange(
                                     json.encodeToString(
@@ -479,17 +479,31 @@ private fun EnabledModulesPriorityList(
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = module.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (module.isEncryptedBinary) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "UNSUPPORTED",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
                     Text(
-                        text = module.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = module.author,
+                        text = if (module.isEncryptedBinary) "${module.author} • .8spine binary not supported" else module.author,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (module.isEncryptedBinary) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -589,6 +603,18 @@ private fun ModuleItem(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+                if (module.isEncryptedBinary) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "UNSUPPORTED (.8SPINE)",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }

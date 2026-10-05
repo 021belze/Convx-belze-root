@@ -41,6 +41,7 @@ fun LibraryScreen(navController: NavController) {
                     LibraryFilter.PLAYLISTS to stringResource(R.string.filter_playlists),
                     LibraryFilter.SONGS to stringResource(R.string.filter_songs),
                     LibraryFilter.ALBUMS to stringResource(R.string.filter_albums),
+                    LibraryFilter.ARTISTS to stringResource(R.string.filter_artists),
                 ),
                 currentValue = filterType,
                 onValueUpdate = {
@@ -83,7 +84,7 @@ fun LibraryScreen(navController: NavController) {
                 LibraryFilter.PLAYLISTS -> LibraryPlaylistsScreen(navController, filterContent)
                 LibraryFilter.SONGS -> LibrarySongsScreen(navController, filterContent)
                 LibraryFilter.ALBUMS -> LibraryAlbumsScreen(navController, filterContent)
-                LibraryFilter.ARTISTS -> LibraryMixScreen(navController, filterContent)
+                LibraryFilter.ARTISTS -> LibraryArtistsScreen(navController, filterContent)
             }
         }
     }

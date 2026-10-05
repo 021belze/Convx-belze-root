@@ -399,6 +399,7 @@ fun LyricsMenu(
         ),
     ) {
         item {
+            val currentLyricsIsSynced = lyricsProvider()?.lyrics?.startsWith("[") == true
             NewActionGrid(
                 actions = listOf(
                     NewAction(
@@ -442,6 +443,27 @@ fun LyricsMenu(
                         text = stringResource(R.string.search),
                         onClick = {
                             showSearchDialog = true
+                        }
+                    ),
+                    NewAction(
+                        icon = {
+                            Icon(
+                                painter = painterResource(R.drawable.mic),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = if (currentLyricsIsSynced) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        text = if (currentLyricsIsSynced) "${stringResource(R.string.karaoke)} ✓" else stringResource(R.string.karaoke),
+                        onClick = {
+                            onDismiss()
+                            if (currentLyricsIsSynced) {
+                                Toast.makeText(context, context.getString(R.string.karaoke_already_active), Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, context.getString(R.string.searching_karaoke_lyrics), Toast.LENGTH_SHORT).show()
+                                viewModel.refetchWithLrcLibPriority(mediaMetadataProvider(), lyricsProvider())
+                            }
                         }
                     )
                 ),

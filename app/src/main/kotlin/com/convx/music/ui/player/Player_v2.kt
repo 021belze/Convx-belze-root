@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -52,15 +53,37 @@ import androidx.media3.common.C
 import com.convx.music.LocalPlayerConnection
 import com.convx.music.constants.PlayerBackgroundStyle
 import com.convx.music.constants.PlayerBackgroundStyleKey
+import com.convx.music.constants.PlayerArtworkStyle
+import com.convx.music.constants.PlayerArtworkStyleKey
+import com.convx.music.constants.SliderStyle
+import com.convx.music.constants.SliderStyleKey
 import com.convx.music.constants.ShowPlayerThumbnailShadowKey
 import com.convx.music.constants.PlayerThumbnailShadowElevationKey
 import com.convx.music.constants.EnableGoogleCastKey
 import com.convx.music.models.MediaMetadata
 import com.convx.music.ui.component.BottomSheetState
 import com.convx.music.ui.component.PlayerSliderTrack
+import com.convx.music.ui.component.WavySlider
+import com.convx.music.ui.component.ScrollingWaveformSeekBar
+import com.convx.music.ui.component.rememberPlaybackFraction
+import com.convx.music.ui.component.shapes.ContinuousRoundedRectangle
 import com.convx.music.ui.theme.PlayerSliderColors
 import com.convx.music.utils.makeTimeString
 import com.convx.music.utils.rememberEnumPreference
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.runtime.State
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import kotlinx.coroutines.Dispatchers
+import kotlin.math.roundToInt
 import com.convx.music.extensions.togglePlayPause
 import com.convx.music.ui.component.Lyrics
 import com.convx.music.ui.component.rememberBottomSheetState
@@ -89,6 +112,7 @@ import com.convx.music.BuildConfig
 import com.convx.music.R
 import com.convx.music.utils.rememberPreference
 import com.convx.music.constants.AppTextColorKey
+import com.convx.music.constants.PlayerStaticColorKey
 import com.convx.music.constants.ShowUpNextKey
 import com.convx.music.ui.player.customize.DiyStickerLayer
 import com.convx.music.ui.player.customize.PlayerGlyph
@@ -152,8 +176,22 @@ fun PlayerV2(
     val audioManager = remember { context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
     val maxSystemVolume = remember { audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() }
     
-    // Custom volume state implementation since produceState awaitDispose can be tricky with imports
+    // Custom volume state implementation with decoupled drag state for silky smooth sliding
     var systemVolume by remember { mutableFloatStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxSystemVolume) }
+    var dragVolume by remember { mutableFloatStateOf(systemVolume) }
+    var isUserAdjustingVolume by remember { mutableStateOf(false) }
+    val volumeScope = rememberCoroutineScope()
+    var lastDispatchedVolumeStep by remember {
+        mutableIntStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC))
+    }
+
+    LaunchedEffect(systemVolume) {
+        if (!isUserAdjustingVolume) {
+            dragVolume = systemVolume
+            lastDispatchedVolumeStep = (systemVolume * maxSystemVolume).roundToInt()
+        }
+    }
+
     val animatedVolume by androidx.compose.animation.core.animateFloatAsState(
         targetValue = systemVolume,
         animationSpec = androidx.compose.animation.core.tween(
@@ -168,9 +206,11 @@ fun PlayerV2(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(context, lifecycleOwner) {
         fun refresh() {
-            systemVolume = audioManager.getStreamVolume(
-                android.media.AudioManager.STREAM_MUSIC
-            ).toFloat() / maxSystemVolume
+            if (!isUserAdjustingVolume) {
+                val currentVol = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                systemVolume = currentVol.toFloat() / maxSystemVolume
+                lastDispatchedVolumeStep = currentVol
+            }
         }
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
@@ -196,12 +236,37 @@ fun PlayerV2(
 
     val storedPlayerBackground by rememberEnumPreference(
         key = PlayerBackgroundStyleKey,
-        defaultValue = PlayerBackgroundStyle.DEFAULT
+        defaultValue = PlayerBackgroundStyle.APPLE_MUSIC
     )
-    val playerBackground = if (storedPlayerBackground == PlayerBackgroundStyle.APPLE_MUSIC) {
-        PlayerBackgroundStyle.DEFAULT
+    val playerBackground = storedPlayerBackground
+
+    val (artworkStyle) = rememberEnumPreference(
+        PlayerArtworkStyleKey,
+        defaultValue = PlayerArtworkStyle.CARD
+    )
+    val (sliderStyle) = rememberEnumPreference(
+        SliderStyleKey,
+        defaultValue = SliderStyle.SLIM
+    )
+    val rotatingThumbnail = artworkStyle != PlayerArtworkStyle.CARD
+    val thumbnailRotation: State<Float> = if (isPlaying && rotatingThumbnail) {
+        val infiniteTransition = rememberInfiniteTransition(label = "V2ThumbnailRotation")
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(20000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "V2Rotation"
+        )
     } else {
-        storedPlayerBackground
+        remember { mutableFloatStateOf(0f) }
+    }
+    val artworkShape = when (artworkStyle) {
+        PlayerArtworkStyle.VINYL -> CircleShape
+        PlayerArtworkStyle.CLOVER -> MaterialShapes.Clover8Leaf.toShape()
+        PlayerArtworkStyle.CARD -> ContinuousRoundedRectangle(12.dp)
     }
     
     val showPlayerThumbnailShadow by rememberPreference(ShowPlayerThumbnailShadowKey, defaultValue = false)
@@ -278,29 +343,39 @@ fun PlayerV2(
         duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
     }
 
+    val staticColor by rememberPreference(PlayerStaticColorKey, defaultValue = 0xFF1C1C1E.toInt())
+    val staticColorLuminance = remember(staticColor) {
+        val c = android.graphics.Color.valueOf(staticColor)
+        0.2126f * c.red() + 0.7152f * c.green() + 0.0722f * c.blue()
+    }
+
     val adaptivePrimary by animateColorAsState(
-        targetValue = if (appTextColorInt != 0) Color(appTextColorInt) else when (playerBackground) {
-            PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.onSurface
+        targetValue = when (playerBackground) {
+            PlayerBackgroundStyle.DEFAULT ->
+                if (appTextColorInt != 0) Color(appTextColorInt) else MaterialTheme.colorScheme.onSurface
             PlayerBackgroundStyle.BLUR,
             PlayerBackgroundStyle.GRADIENT,
             PlayerBackgroundStyle.GLOW_ANIMATED,
             PlayerBackgroundStyle.APPLE_MUSIC,
             PlayerBackgroundStyle.LIVE_MESH,
-            PlayerBackgroundStyle.STATIC,
             PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.White
+            PlayerBackgroundStyle.STATIC ->
+                if (staticColorLuminance > 0.4f) Color(0xFF1C1C1E) else Color.White
         },
         label = "adaptivePrimary"
     )
     val adaptiveSecondary by animateColorAsState(
-        targetValue = if (appTextColorInt != 0) Color(appTextColorInt).copy(alpha = 0.7f) else when (playerBackground) {
-            PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.onSurfaceVariant
+        targetValue = when (playerBackground) {
+            PlayerBackgroundStyle.DEFAULT ->
+                if (appTextColorInt != 0) Color(appTextColorInt).copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
             PlayerBackgroundStyle.BLUR,
             PlayerBackgroundStyle.GRADIENT,
             PlayerBackgroundStyle.GLOW_ANIMATED,
             PlayerBackgroundStyle.APPLE_MUSIC,
             PlayerBackgroundStyle.LIVE_MESH,
-            PlayerBackgroundStyle.STATIC,
             PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.White.copy(alpha = 0.7f)
+            PlayerBackgroundStyle.STATIC ->
+                if (staticColorLuminance > 0.4f) Color(0xFF1C1C1E).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f)
         },
         label = "adaptiveSecondary"
     )
@@ -312,8 +387,9 @@ fun PlayerV2(
             PlayerBackgroundStyle.GLOW_ANIMATED,
             PlayerBackgroundStyle.APPLE_MUSIC,
             PlayerBackgroundStyle.LIVE_MESH,
-            PlayerBackgroundStyle.STATIC,
             PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.White.copy(alpha = 0.2f)
+            PlayerBackgroundStyle.STATIC ->
+                if (staticColorLuminance > 0.4f) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.2f)
         },
         label = "adaptiveSurface"
     )
@@ -400,12 +476,10 @@ fun PlayerV2(
                                         .fillMaxWidth()
                                         .aspectRatio(1f)
                                         // Target end of the mini-to-full artwork morph.
-                                        // Without this the overlay has no full rect to
-                                        // grow into and the morph silently does nothing
-                                        // on this player -- the classic player registers
-                                        // its own artwork the same way.
                                         .registerFullArtworkRect(
-                                            with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+                                            with(androidx.compose.ui.platform.LocalDensity.current) {
+                                                if (artworkStyle == PlayerArtworkStyle.CARD) 12.dp.toPx() else 180.dp.toPx()
+                                            }
                                         )
                                         // The overlay owns the cover for the whole
                                         // flight; without this both are on screen from
@@ -413,11 +487,11 @@ fun PlayerV2(
                                         .hideWhileMorphing()
                                         .customSoftShadow(
                                             elevation = playerThumbnailShadowElevation.dp, 
-                                            cornerRadius = 12.dp, 
+                                            cornerRadius = if (artworkStyle == PlayerArtworkStyle.CARD) 12.dp else 180.dp, 
                                             enabled = showPlayerThumbnailShadow
                                         )
-                                        .background(adaptiveSurface, RoundedCornerShape(12.dp))
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(adaptiveSurface, artworkShape)
+                                        .clip(artworkShape)
                                         .SwipeGesture(
                                             enabled = (playerState == PlayerInternalState.COVER && !isListenTogetherGuest),
                                             onSwipeLeft = { if (canSkipNext) playerConnection.player.seekToNext() },
@@ -431,9 +505,34 @@ fun PlayerV2(
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = "Cover Art",
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer {
+                                                rotationZ = thumbnailRotation.value
+                                            },
                                         contentScale = ContentScale.Crop
                                     )
+                                    if (artworkStyle == PlayerArtworkStyle.VINYL) {
+                                        Canvas(Modifier.fillMaxSize()) {
+                                            val r = size.minDimension / 2f
+                                            val c = Offset(size.width / 2f, size.height / 2f)
+                                            drawCircle(
+                                                color = Color.Black.copy(alpha = 0.82f),
+                                                radius = r * 0.67f,
+                                                center = c,
+                                                style = Stroke(width = r * 0.66f),
+                                            )
+                                            for (i in 1..7) {
+                                                drawCircle(
+                                                    color = Color.White.copy(alpha = 0.05f),
+                                                    radius = r * (0.40f + i * 0.083f),
+                                                    center = c,
+                                                    style = Stroke(width = 1.dp.toPx()),
+                                                )
+                                            }
+                                            drawCircle(Color.Black, radius = r * 0.055f, center = c)
+                                        }
+                                    }
                                     DiyStickerLayer(
                                         layout = diyLayout,
                                         orientation = DiyOrientation.PORTRAIT,
@@ -742,37 +841,116 @@ fun PlayerV2(
                         label = "trackScale"
                     )
                     
-                    Slider(
-                        value = currentPos.toFloat(),
-                        valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
-                        onValueChange = { value ->
-                            if (!isListenTogetherGuest) {
-                                sliderPosition = value.toLong()
-                            }
-                        },
-                        onValueChangeFinished = {
-                            if (!isListenTogetherGuest) {
-                                sliderPosition?.let { pos ->
-                                    playerConnection.player.seekTo(pos)
-                                    position = pos
-                                    sliderPosition = null
-                                }
-                            }
-                        },
-                        enabled = !isListenTogetherGuest,
-                        interactionSource = trackInteractionSource,
-                        thumb = { Spacer(modifier = Modifier.size(0.dp)) },
-                        track = { sliderState ->
-                            PlayerSliderTrack(
-                                sliderState = sliderState,
-                                trackHeight = trackHeight,
-                                colors = PlayerSliderColors.getSliderColors(
-                                    activeColor = adaptivePrimary.copy(alpha = 0.8f)
-                                )
+                    when (sliderStyle) {
+                        SliderStyle.DEFAULT -> {
+                            Slider(
+                                value = currentPos.toFloat(),
+                                valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                                onValueChange = { value ->
+                                    if (!isListenTogetherGuest) sliderPosition = value.toLong()
+                                },
+                                onValueChangeFinished = {
+                                    if (!isListenTogetherGuest) {
+                                        sliderPosition?.let { pos ->
+                                            playerConnection.player.seekTo(pos)
+                                            position = pos
+                                            sliderPosition = null
+                                        }
+                                    }
+                                },
+                                enabled = !isListenTogetherGuest,
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = adaptivePrimary,
+                                    inactiveTrackColor = adaptivePrimary.copy(alpha = 0.2f),
+                                    thumbColor = adaptivePrimary
+                                ),
+                                modifier = Modifier.fillMaxWidth().height(24.dp)
                             )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        }
+                        SliderStyle.WAVY -> {
+                            WavySlider(
+                                value = currentPos.toFloat(),
+                                valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                                onValueChange = { value ->
+                                    if (!isListenTogetherGuest) sliderPosition = value.toLong()
+                                },
+                                onValueChangeFinished = {
+                                    if (!isListenTogetherGuest) {
+                                        sliderPosition?.let { pos ->
+                                            playerConnection.player.seekTo(pos)
+                                            position = pos
+                                            sliderPosition = null
+                                        }
+                                    }
+                                },
+                                isPlaying = isPlaying,
+                                enabled = !isListenTogetherGuest,
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = adaptivePrimary,
+                                    inactiveTrackColor = adaptivePrimary.copy(alpha = 0.2f),
+                                    thumbColor = adaptivePrimary
+                                ),
+                                modifier = Modifier.fillMaxWidth().height(24.dp)
+                            )
+                        }
+                        SliderStyle.WAVEFORM -> {
+                            val waveFraction = rememberPlaybackFraction(playerConnection.player, isPlaying)
+                            ScrollingWaveformSeekBar(
+                                progress = {
+                                    val dragged = sliderPosition
+                                    if (dragged != null && duration > 0) {
+                                        (dragged.toFloat() / duration).coerceIn(0f, 1f)
+                                    } else {
+                                        waveFraction.value
+                                    }
+                                },
+                                onSeek = { frac ->
+                                    if (!isListenTogetherGuest && duration > 0) {
+                                        val targetMs = (frac * duration).toLong().coerceIn(0L, duration)
+                                        playerConnection.player.seekTo(targetMs)
+                                        position = targetMs
+                                    }
+                                },
+                                playedColor = adaptivePrimary,
+                                trackColor = adaptivePrimary.copy(alpha = 0.2f),
+                                seed = mediaMetadata?.id?.hashCode() ?: 0,
+                                modifier = Modifier.fillMaxWidth().height(24.dp)
+                            )
+                        }
+                        SliderStyle.SLIM -> {
+                            Slider(
+                                value = currentPos.toFloat(),
+                                valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                                onValueChange = { value ->
+                                    if (!isListenTogetherGuest) {
+                                        sliderPosition = value.toLong()
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    if (!isListenTogetherGuest) {
+                                        sliderPosition?.let { pos ->
+                                            playerConnection.player.seekTo(pos)
+                                            position = pos
+                                            sliderPosition = null
+                                        }
+                                    }
+                                },
+                                enabled = !isListenTogetherGuest,
+                                interactionSource = trackInteractionSource,
+                                thumb = { Spacer(modifier = Modifier.size(0.dp)) },
+                                track = { sliderState ->
+                                    PlayerSliderTrack(
+                                        sliderState = sliderState,
+                                        trackHeight = trackHeight,
+                                        colors = PlayerSliderColors.getSliderColors(
+                                            activeColor = adaptivePrimary.copy(alpha = 0.8f)
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -876,6 +1054,13 @@ fun PlayerV2(
                         val isVolDragged by volumeInteractionSource.collectIsDraggedAsState()
                         val isVolPressed by volumeInteractionSource.collectIsPressedAsState()
                         val isVolActive = isVolDragged || isVolPressed
+
+                        LaunchedEffect(isVolActive) {
+                            isUserAdjustingVolume = isVolActive
+                            if (!isVolActive) {
+                                systemVolume = dragVolume
+                            }
+                        }
                         
                         val volHeight by animateDpAsState(
                             targetValue = if (isVolActive) 12.dp else 6.dp,
@@ -884,11 +1069,30 @@ fun PlayerV2(
                         )
                         
                         Slider(
-                            value = if (isVolActive) systemVolume else animatedVolume,
+                            value = if (isVolActive) dragVolume else animatedVolume,
                             onValueChange = { newValue ->
-                                systemVolume = newValue
-                                val targetVolume = (newValue * maxSystemVolume).toInt()
-                                audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetVolume, 0)
+                                dragVolume = newValue
+                                val targetStep = (newValue * maxSystemVolume).roundToInt().coerceIn(0, maxSystemVolume.toInt())
+                                if (targetStep != lastDispatchedVolumeStep) {
+                                    lastDispatchedVolumeStep = targetStep
+                                    volumeScope.launch(Dispatchers.Default) {
+                                        try {
+                                            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetStep, 0)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            },
+                            onValueChangeFinished = {
+                                val targetStep = (dragVolume * maxSystemVolume).roundToInt().coerceIn(0, maxSystemVolume.toInt())
+                                if (targetStep != lastDispatchedVolumeStep) {
+                                    lastDispatchedVolumeStep = targetStep
+                                    volumeScope.launch(Dispatchers.Default) {
+                                        try {
+                                            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetStep, 0)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                                systemVolume = dragVolume
                             },
                             interactionSource = volumeInteractionSource,
                             thumb = { Spacer(modifier = Modifier.size(0.dp)) },
@@ -1041,11 +1245,11 @@ fun PlayerV2(
                                             .aspectRatio(1f)
                                             .customSoftShadow(
                                                 elevation = playerThumbnailShadowElevation.dp, 
-                                                cornerRadius = 16.dp, 
+                                                cornerRadius = if (artworkStyle == PlayerArtworkStyle.CARD) 16.dp else 180.dp, 
                                                 enabled = showPlayerThumbnailShadow
                                             )
-                                            .background(adaptiveSurface, RoundedCornerShape(16.dp))
-                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(adaptiveSurface, artworkShape)
+                                            .clip(artworkShape)
                                             .SwipeGesture(
                                                 enabled = (playerState == PlayerInternalState.COVER && !isListenTogetherGuest),
                                                 onSwipeLeft = { if (canSkipNext) playerConnection.player.seekToNext() },
@@ -1059,9 +1263,34 @@ fun PlayerV2(
                                                 .crossfade(true)
                                                 .build(),
                                             contentDescription = "Cover Art",
-                                            modifier = Modifier.fillMaxSize(),
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .graphicsLayer {
+                                                    rotationZ = thumbnailRotation.value
+                                                },
                                             contentScale = ContentScale.Crop
                                         )
+                                        if (artworkStyle == PlayerArtworkStyle.VINYL) {
+                                            Canvas(Modifier.fillMaxSize()) {
+                                                val r = size.minDimension / 2f
+                                                val c = Offset(size.width / 2f, size.height / 2f)
+                                                drawCircle(
+                                                    color = Color.Black.copy(alpha = 0.82f),
+                                                    radius = r * 0.67f,
+                                                    center = c,
+                                                    style = Stroke(width = r * 0.66f),
+                                                )
+                                                for (i in 1..7) {
+                                                    drawCircle(
+                                                        color = Color.White.copy(alpha = 0.05f),
+                                                        radius = r * (0.40f + i * 0.083f),
+                                                        center = c,
+                                                        style = Stroke(width = 1.dp.toPx()),
+                                                    )
+                                                }
+                                                drawCircle(Color.Black, radius = r * 0.055f, center = c)
+                                            }
+                                        }
                                         DiyStickerLayer(
                                             layout = diyLayout,
                                             orientation = DiyOrientation.LANDSCAPE,
@@ -1258,37 +1487,116 @@ fun PlayerV2(
                     )
 
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Slider(
-                            value = currentPos.toFloat(),
-                            valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
-                            onValueChange = { value ->
-                                if (!isListenTogetherGuest) {
-                                    sliderPosition = value.toLong()
-                                }
-                            },
-                            onValueChangeFinished = {
-                                if (!isListenTogetherGuest) {
-                                    sliderPosition?.let { pos ->
-                                        playerConnection.player.seekTo(pos)
-                                        position = pos
-                                        sliderPosition = null
-                                    }
-                                }
-                            },
-                            enabled = !isListenTogetherGuest,
-                            interactionSource = trackInteractionSource,
-                            thumb = { Spacer(modifier = Modifier.size(0.dp)) },
-                            track = { sliderState ->
-                                PlayerSliderTrack(
-                                    sliderState = sliderState,
-                                    trackHeight = trackHeight,
-                                    colors = PlayerSliderColors.getSliderColors(
-                                        activeColor = adaptivePrimary.copy(alpha = 0.8f)
-                                    )
+                        when (sliderStyle) {
+                            SliderStyle.DEFAULT -> {
+                                Slider(
+                                    value = currentPos.toFloat(),
+                                    valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                                    onValueChange = { value ->
+                                        if (!isListenTogetherGuest) sliderPosition = value.toLong()
+                                    },
+                                    onValueChangeFinished = {
+                                        if (!isListenTogetherGuest) {
+                                            sliderPosition?.let { pos ->
+                                                playerConnection.player.seekTo(pos)
+                                                position = pos
+                                                sliderPosition = null
+                                            }
+                                        }
+                                    },
+                                    enabled = !isListenTogetherGuest,
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = adaptivePrimary,
+                                        inactiveTrackColor = adaptivePrimary.copy(alpha = 0.2f),
+                                        thumbColor = adaptivePrimary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().height(18.dp)
                                 )
-                            },
-                            modifier = Modifier.fillMaxWidth().height(16.dp)
-                        )
+                            }
+                            SliderStyle.WAVY -> {
+                                WavySlider(
+                                    value = currentPos.toFloat(),
+                                    valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                                    onValueChange = { value ->
+                                        if (!isListenTogetherGuest) sliderPosition = value.toLong()
+                                    },
+                                    onValueChangeFinished = {
+                                        if (!isListenTogetherGuest) {
+                                            sliderPosition?.let { pos ->
+                                                playerConnection.player.seekTo(pos)
+                                                position = pos
+                                                sliderPosition = null
+                                            }
+                                        }
+                                    },
+                                    isPlaying = isPlaying,
+                                    enabled = !isListenTogetherGuest,
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = adaptivePrimary,
+                                        inactiveTrackColor = adaptivePrimary.copy(alpha = 0.2f),
+                                        thumbColor = adaptivePrimary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().height(18.dp)
+                                )
+                            }
+                            SliderStyle.WAVEFORM -> {
+                                val waveFraction = rememberPlaybackFraction(playerConnection.player, isPlaying)
+                                ScrollingWaveformSeekBar(
+                                    progress = {
+                                        val dragged = sliderPosition
+                                        if (dragged != null && duration > 0) {
+                                            (dragged.toFloat() / duration).coerceIn(0f, 1f)
+                                        } else {
+                                            waveFraction.value
+                                        }
+                                    },
+                                    onSeek = { frac ->
+                                        if (!isListenTogetherGuest && duration > 0) {
+                                            val targetMs = (frac * duration).toLong().coerceIn(0L, duration)
+                                            playerConnection.player.seekTo(targetMs)
+                                            position = targetMs
+                                        }
+                                    },
+                                    playedColor = adaptivePrimary,
+                                    trackColor = adaptivePrimary.copy(alpha = 0.2f),
+                                    seed = mediaMetadata?.id?.hashCode() ?: 0,
+                                    modifier = Modifier.fillMaxWidth().height(18.dp)
+                                )
+                            }
+                            SliderStyle.SLIM -> {
+                                Slider(
+                                    value = currentPos.toFloat(),
+                                    valueRange = 0f..(if (duration == androidx.media3.common.C.TIME_UNSET) 0f else duration.toFloat()),
+                                    onValueChange = { value ->
+                                        if (!isListenTogetherGuest) {
+                                            sliderPosition = value.toLong()
+                                        }
+                                    },
+                                    onValueChangeFinished = {
+                                        if (!isListenTogetherGuest) {
+                                            sliderPosition?.let { pos ->
+                                                playerConnection.player.seekTo(pos)
+                                                position = pos
+                                                sliderPosition = null
+                                            }
+                                        }
+                                    },
+                                    enabled = !isListenTogetherGuest,
+                                    interactionSource = trackInteractionSource,
+                                    thumb = { Spacer(modifier = Modifier.size(0.dp)) },
+                                    track = { sliderState ->
+                                        PlayerSliderTrack(
+                                            sliderState = sliderState,
+                                            trackHeight = trackHeight,
+                                            colors = PlayerSliderColors.getSliderColors(
+                                                activeColor = adaptivePrimary.copy(alpha = 0.8f)
+                                            )
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(16.dp)
+                                )
+                            }
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -1373,17 +1681,44 @@ fun PlayerV2(
                         val isVolDragged by volumeInteractionSource.collectIsDraggedAsState()
                         val isVolPressed by volumeInteractionSource.collectIsPressedAsState()
                         val isVolActive = isVolDragged || isVolPressed
+
+                        LaunchedEffect(isVolActive) {
+                            isUserAdjustingVolume = isVolActive
+                            if (!isVolActive) {
+                                systemVolume = dragVolume
+                            }
+                        }
+
                         val volHeight by animateDpAsState(
                             targetValue = if (isVolActive) 10.dp else 5.dp,
                             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
                             label = "volHeightLandscape"
                         )
                         Slider(
-                            value = if (isVolActive) systemVolume else animatedVolume,
+                            value = if (isVolActive) dragVolume else animatedVolume,
                             onValueChange = { newValue ->
-                                systemVolume = newValue
-                                val targetVolume = (newValue * maxSystemVolume).toInt()
-                                audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetVolume, 0)
+                                dragVolume = newValue
+                                val targetStep = (newValue * maxSystemVolume).roundToInt().coerceIn(0, maxSystemVolume.toInt())
+                                if (targetStep != lastDispatchedVolumeStep) {
+                                    lastDispatchedVolumeStep = targetStep
+                                    volumeScope.launch(Dispatchers.Default) {
+                                        try {
+                                            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetStep, 0)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            },
+                            onValueChangeFinished = {
+                                val targetStep = (dragVolume * maxSystemVolume).roundToInt().coerceIn(0, maxSystemVolume.toInt())
+                                if (targetStep != lastDispatchedVolumeStep) {
+                                    lastDispatchedVolumeStep = targetStep
+                                    volumeScope.launch(Dispatchers.Default) {
+                                        try {
+                                            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetStep, 0)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                                systemVolume = dragVolume
                             },
                             interactionSource = volumeInteractionSource,
                             thumb = { Spacer(modifier = Modifier.size(0.dp)) },

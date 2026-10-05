@@ -25,9 +25,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,11 +67,15 @@ import com.convx.music.ui.component.Material3MenuGroup
 import com.convx.music.ui.component.Material3MenuItemData
 import com.convx.music.ui.component.NewAction
 import com.convx.music.ui.component.NewActionGrid
+import com.convx.music.ui.component.SleepTimerDialog
 import com.convx.music.ui.component.VolumeSlider
 import com.convx.music.ui.theme.rememberGlobalAccentColors
 import com.convx.music.constants.EnableSaavnStreamingKey
+import com.convx.music.utils.makeTimeString
 import com.convx.music.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @Composable
@@ -122,6 +128,38 @@ fun OldPlayerMenu(
     var showListenTogetherDialog by rememberSaveable { mutableStateOf(false) }
     var showSelectArtistDialog by rememberSaveable { mutableStateOf(false) }
     var showPitchTempoDialog by rememberSaveable { mutableStateOf(false) }
+    var showSleepTimerDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(
+            onDismiss = { showSleepTimerDialog = false }
+        )
+    }
+
+    val sleepTimerEnabled = remember(
+        playerConnection.service.sleepTimer.triggerTime,
+        playerConnection.service.sleepTimer.pauseWhenSongEnd
+    ) {
+        playerConnection.service.sleepTimer.isActive
+    }
+
+    var sleepTimerTimeLeft by remember {
+        mutableLongStateOf(0L)
+    }
+
+    LaunchedEffect(sleepTimerEnabled) {
+        if (sleepTimerEnabled) {
+            while (isActive) {
+                sleepTimerTimeLeft =
+                    if (playerConnection.service.sleepTimer.pauseWhenSongEnd) {
+                        (playerConnection.player.duration - playerConnection.player.currentPosition).coerceAtLeast(0L)
+                    } else {
+                        (playerConnection.service.sleepTimer.triggerTime - System.currentTimeMillis()).coerceAtLeast(0L)
+                    }
+                delay(1000L)
+            }
+        }
+    }
 
     AddToPlaylistDialog(
         isVisible = showChoosePlaylistDialog,
@@ -636,8 +674,14 @@ fun OldPlayerMenu(
                                 )
                             },
                             onClick = {
-                                navController.navigate("equalizer")
+                                // Epik A: dismiss menu and collapse player first so the
+                                // equalizer dialog isn't hidden behind the expanded sheet.
                                 onDismiss()
+                                coroutineScope.launch {
+                                    playerBottomSheetState.collapseSoft()
+                                    delay(160L)
+                                    navController.navigate("equalizer")
+                                }
                             }
                         )
                     )
@@ -697,6 +741,35 @@ fun OldPlayerMenu(
                                 navController.navigate("ambient_mode")
                                 playerBottomSheetState.collapseSoft()
                                 onDismiss()
+                            }
+                        )
+                    )
+                    add(
+                        Material3MenuItemData(
+                            title = { Text(text = stringResource(R.string.sleep_timer)) },
+                            description = {
+                                Text(
+                                    text = if (sleepTimerEnabled) {
+                                        if (playerConnection.service.sleepTimer.pauseWhenSongEnd) {
+                                            stringResource(R.string.end_of_song)
+                                        } else {
+                                            makeTimeString(sleepTimerTimeLeft)
+                                        }
+                                    } else {
+                                        stringResource(R.string.sleep_timer_off)
+                                    }
+                                )
+                            },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.bedtime),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = if (sleepTimerEnabled) MaterialTheme.colorScheme.primary else androidx.compose.material3.LocalContentColor.current
+                                )
+                            },
+                            onClick = {
+                                showSleepTimerDialog = true
                             }
                         )
                     )

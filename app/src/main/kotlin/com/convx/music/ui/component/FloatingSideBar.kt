@@ -5,9 +5,20 @@
 
 package com.convx.music.ui.component
 
+import androidx.compose.animation.AnimatedVisibility
+import com.convx.music.ui.utils.Motion
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,6 +35,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -34,8 +46,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +81,8 @@ import com.convx.music.ui.component.shapes.ContinuousRoundedRectangle
 import com.convx.music.ui.player.FloatingMiniPlayer
 import com.convx.music.ui.screens.Screens
 import com.convx.music.ui.theme.BrandName
+import com.convx.music.ui.theme.LocalAccentTextColor
+import com.convx.music.ui.theme.LocalDynamicPlayerThemeColor
 import com.convx.music.ui.theme.rememberBrandFontFamily
 import com.convx.music.ui.utils.fadingEdge
 
@@ -137,6 +154,7 @@ data class SideBarLink(
     val iconRes: Int? = null,
     /** Playlist/album art, shown instead of [iconRes] when set. */
     val thumbnailUrl: String? = null,
+    val isSelected: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -145,6 +163,8 @@ data class SideBarSection(
     /** null renders the rows with no heading. */
     val title: String? = null,
     val links: List<SideBarLink>,
+    val isCollapsible: Boolean = false,
+    val defaultCollapsed: Boolean = false,
 )
 
 @Immutable
@@ -186,7 +206,10 @@ fun AppFloatingSideBar(
     val targetPanelWidth = if (collapsed) SideBarCollapsedWidth else SideBarWidth
     val panelWidth by animateDpAsState(
         targetValue = targetPanelWidth,
-        animationSpec = spring(0.9f, 400f),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
         label = "sideBarWidth",
     )
 
@@ -227,6 +250,8 @@ fun AppFloatingSideBar(
         Modifier
     }
 
+    val playerThemeColor = LocalDynamicPlayerThemeColor.current
+
     Column(
         modifier
             .width(panelWidth)
@@ -234,6 +259,13 @@ fun AppFloatingSideBar(
             .background(backgroundColor, panelShape)
             .clip(panelShape)
             .then(panelSurface)
+            .then(
+                if (playerThemeColor != null && playerThemeColor.isSpecified) {
+                    Modifier.background(playerThemeColor.copy(alpha = 0.08f), panelShape)
+                } else {
+                    Modifier
+                }
+            )
             .then(interactiveHighlight.modifier)
             .padding(vertical = 14.dp),
     ) {
@@ -244,7 +276,11 @@ fun AppFloatingSideBar(
                 .padding(start = if (collapsed) 0.dp else 22.dp, bottom = 10.dp),
             horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.SpaceBetween,
         ) {
-            if (!collapsed) {
+            AnimatedVisibility(
+                visible = !collapsed,
+                enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(180)) { -it / 3 },
+                exit = fadeOut(tween(80)),
+            ) {
                 Text(
                     text = BrandName,
                     fontFamily = rememberBrandFontFamily(),
@@ -293,19 +329,14 @@ fun AppFloatingSideBar(
             // The library sections (playlists, history, ...) need a text label to
             // mean anything — an icon-only rail collapses to just the primary tabs,
             // same as NavigationRail never showing arbitrary link lists either.
-            if (!collapsed) {
-                sections.forEach { section ->
-                    section.title?.let { title ->
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = glassConfig.textColor.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 4.dp),
-                        )
-                    }
-                    section.links.forEach { link ->
-                        SideBarLinkRow(link = link, contentColor = glassConfig.textColor)
+            AnimatedVisibility(
+                visible = !collapsed,
+                enter = fadeIn(tween(200, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(80)),
+            ) {
+                Column {
+                    sections.forEach { section ->
+                        SideBarSectionView(section = section, contentColor = glassConfig.textColor)
                     }
                 }
             }
@@ -374,12 +405,21 @@ private fun SideNavTabs(
     val backdrop = if (useGlass) LocalAppBackdrop.current else null
     val tabHeightPx = with(density) { SideTabHeight.toPx() }
 
-    val selectedIndex = tabs.indexOfFirst { it.selected }.coerceAtLeast(0)
+    val hasSelection = tabs.any { it.selected }
+    val rawIndex = tabs.indexOfFirst { it.selected }
+    val selectedIndex = if (rawIndex >= 0) rawIndex else 0
+    val puckAlpha by animateFloatAsState(
+        targetValue = if (hasSelection) 1f else 0f,
+        animationSpec = tween(150),
+        label = "puckAlpha",
+    )
 
     // The puck's position, in tab indices. Nothing drives it but the selection.
     val puckPosition = remember { Animatable(selectedIndex.toFloat()) }
-    LaunchedEffect(selectedIndex) {
-        puckPosition.animateTo(selectedIndex.toFloat(), spring(0.9f, 400f, 0.001f))
+    LaunchedEffect(selectedIndex, hasSelection) {
+        if (hasSelection) {
+            puckPosition.animateTo(selectedIndex.toFloat(), Motion.select())
+        }
     }
 
     Box(
@@ -387,13 +427,21 @@ private fun SideNavTabs(
             .fillMaxWidth()
             .height(SideTabHeight * tabsCount + SideBarContentPadding.calculateTopPadding() * 2)
     ) {
-        // Drawn FIRST, so the icons sit on top of it. The phone bar has to sample
-        // a hidden copy of its row because its puck covers the icon; putting this
-        // one underneath gets the same look with one icon instead of three.
+        // Drawn FIRST at zIndex(-1) so it sits visually and spatially BELOW the
+        // clickable Column. graphicsLayer { translationY } only moves the rendering
+        // layer — the hit-test rect stays at the layout position. Without zIndex(-1)
+        // the puck Box's hit-test area (always at row 0) silently intercepted touches
+        // intended for the Column's rows, making every tab except the selected one
+        // unresponsive when the puck was on them. zIndex(-1) pushes the puck below
+        // the Column in hit-testing too, so all rows receive clicks correctly.
         Box(
             Modifier
+                .zIndex(-1f)
                 .padding(SideBarContentPadding)
-                .graphicsLayer { translationY = puckPosition.value * tabHeightPx }
+                .graphicsLayer {
+                    translationY = puckPosition.value * tabHeightPx
+                    alpha = puckAlpha
+                }
                 .fillMaxWidth()
                 .height(SideTabHeight)
                 .then(
@@ -552,17 +600,23 @@ fun SideBarAccountRow(
                 )
             }
         }
-        if (!collapsed) {
-            Spacer(Modifier.width(14.dp))
-            Text(
-                text = stringResource(
-                    if (accountImageUrl != null) R.string.account else R.string.settings
-                ),
-                color = contentColor,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        AnimatedVisibility(
+            visible = !collapsed,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(180)) { -it / 3 },
+            exit = fadeOut(tween(80)),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = stringResource(
+                        if (accountImageUrl != null) R.string.account else R.string.settings
+                    ),
+                    color = contentColor,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -596,27 +650,108 @@ private fun SideTabRow(
                 modifier = Modifier.size(SideRowIconSize),
             )
         }
-        if (!collapsed) {
-            Spacer(Modifier.width(14.dp))
+        AnimatedVisibility(
+            visible = !collapsed,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(180)) { -it / 3 },
+            exit = fadeOut(tween(80)),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = stringResource(tab.screen.titleId),
+                    color = contentColor,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SideBarSectionView(
+    section: SideBarSection,
+    contentColor: Color,
+) {
+    if (section.links.isEmpty()) return
+
+    if (section.isCollapsible && section.title != null) {
+        var isExpanded by rememberSaveable(section.title) {
+            mutableStateOf(!section.defaultCollapsed)
+        }
+        val chevronRotation by animateFloatAsState(
+            targetValue = if (isExpanded) 90f else 0f,
+            animationSpec = Motion.select(),
+            label = "sectionChevronRotation",
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(SideRowShape)
+                .clickable { isExpanded = !isExpanded }
+                .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 4.dp),
+        ) {
             Text(
-                text = stringResource(tab.screen.titleId),
-                color = contentColor,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = section.title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor.copy(alpha = 0.6f),
             )
+            Icon(
+                painter = painterResource(R.drawable.chevron_right_px),
+                contentDescription = null,
+                tint = contentColor.copy(alpha = 0.45f),
+                modifier = Modifier
+                    .size(16.dp)
+                    .graphicsLayer { rotationZ = chevronRotation },
+            )
+        }
+
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn(tween(180)) + expandVertically(spring(0.85f, 400f)),
+            exit = fadeOut(tween(140)) + shrinkVertically(spring(0.85f, 400f)),
+        ) {
+            Column {
+                section.links.forEach { link ->
+                    SideBarLinkRow(link = link, contentColor = contentColor)
+                }
+            }
+        }
+    } else {
+        section.title?.let { title ->
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor.copy(alpha = 0.6f),
+                modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 4.dp),
+            )
+        }
+        section.links.forEach { link ->
+            SideBarLinkRow(link = link, contentColor = contentColor)
         }
     }
 }
 
 @Composable
 private fun SideBarLinkRow(link: SideBarLink, contentColor: Color) {
+    val isSelected = link.isSelected
+    val activeColor = LocalAccentTextColor.current ?: MaterialTheme.colorScheme.primary
+    val effectiveColor = if (isSelected) activeColor else contentColor
+    val rowBg = if (isSelected) effectiveColor.copy(alpha = 0.12f) else Color.Transparent
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .height(SideTabHeight)
             .clip(SideRowShape)
+            .background(rowBg, SideRowShape)
             .clickable(onClick = link.onClick)
             .padding(horizontal = 16.dp),
     ) {
@@ -637,7 +772,7 @@ private fun SideBarLinkRow(link: SideBarLink, contentColor: Color) {
                 link.iconRes != null -> Icon(
                     painter = painterResource(link.iconRes),
                     contentDescription = null,
-                    tint = contentColor,
+                    tint = effectiveColor,
                     modifier = Modifier.size(SideRowIconSize),
                 )
             }
@@ -645,8 +780,9 @@ private fun SideBarLinkRow(link: SideBarLink, contentColor: Color) {
         Spacer(Modifier.width(14.dp))
         Text(
             text = link.label,
-            color = contentColor,
+            color = effectiveColor,
             style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

@@ -8,10 +8,10 @@ package com.convx.music.ui.screens.settings
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.animation.core.animateFloatAsState
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -30,17 +30,14 @@ import androidx.compose.foundation.verticalScroll
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.AlertDialog
 import com.convx.music.ui.utils.appTopBarWindowInsets
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.Icon
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.LinearProgressIndicator
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.MaterialTheme
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.Slider
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.material3.TextButton
 import com.convx.music.ui.utils.appTopBarWindowInsets
@@ -139,9 +136,26 @@ fun StorageSettings(
 ) {
     val context = LocalContext.current
     val database = LocalDatabase.current
-    val imageDiskCache = context.imageLoader.diskCache ?: return
-    val playerCache = LocalPlayerConnection.current?.service?.playerCache ?: return
-    val downloadCache = LocalPlayerConnection.current?.service?.downloadCache ?: return
+    val playerConnection = LocalPlayerConnection.current
+    val imageDiskCache = context.imageLoader.diskCache
+    val playerCache = playerConnection?.service?.playerCache
+    val downloadCache = playerConnection?.service?.downloadCache
+
+    if (imageDiskCache == null || playerCache == null || downloadCache == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(
+                    LocalPlayerAwareWindowInsets.current.only(
+                        WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val songCacheString = stringResource(R.string.song_cache).lowercase()
@@ -424,6 +438,8 @@ fun StorageSettings(
                             Text(
                                 text = if (maxSongCacheSize == -1) {
                                     formatFileSize(playerCacheSize)
+                                } else if (maxSongCacheSize == 0) {
+                                    stringResource(R.string.disable)
                                 } else {
                                     "${formatFileSize(playerCacheSize)} / ${
                                         formatFileSize(
@@ -487,11 +503,15 @@ fun StorageSettings(
                             )
                             Spacer(modifier = Modifier.padding(2.dp))
                             Text(
-                                text = "${formatFileSize(imageCacheSize)} / ${
-                                    formatFileSize(
-                                        maxImageCacheSize * 1024 * 1024L
-                                    )
-                                }",
+                                text = if (maxImageCacheSize == 0) {
+                                    stringResource(R.string.disable)
+                                } else {
+                                    "${formatFileSize(imageCacheSize)} / ${
+                                        formatFileSize(
+                                            maxImageCacheSize * 1024 * 1024L
+                                        )
+                                    }"
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }

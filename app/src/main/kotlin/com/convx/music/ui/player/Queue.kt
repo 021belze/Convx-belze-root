@@ -10,12 +10,17 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -59,6 +64,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -80,6 +86,7 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,6 +142,7 @@ import com.convx.music.ui.component.BottomSheetState
 import com.convx.music.ui.component.LocalBottomSheetPageState
 import com.convx.music.ui.component.LocalMenuState
 import com.convx.music.ui.component.MediaMetadataListItem
+import com.convx.music.ui.component.SleepTimerDialog
 import com.convx.music.ui.component.thumbnailPx
 import com.convx.music.ui.menu.PlayerMenu
 import com.convx.music.ui.menu.QueueMenu
@@ -412,11 +420,7 @@ fun Queue(
                     PlayerQueueButton(
                         icon = R.drawable.bedtime,
                         onClick = {
-                            if (sleepTimerEnabled) {
-                                playerConnection.service.sleepTimer.clear()
-                            } else {
-                                showSleepTimerDialog = true
-                            }
+                            showSleepTimerDialog = true
                         },
                         isActive = sleepTimerEnabled,
                         enabled = !isListenTogetherGuest,
@@ -616,11 +620,7 @@ fun Queue(
                             checked = sleepTimerEnabled,
                             onCheckedChange = {
                                 if (!isListenTogetherGuest) {
-                                    if (sleepTimerEnabled) {
-                                        playerConnection.service.sleepTimer.clear()
-                                    } else {
-                                        showSleepTimerDialog = true
-                                    }
+                                    showSleepTimerDialog = true
                                 }
                             },
                             shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
@@ -692,64 +692,8 @@ fun Queue(
             }
 
             if (showSleepTimerDialog) {
-                ActionPromptDialog(
-                    titleBar = {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.sleep_timer),
-                                overflow = TextOverflow.Ellipsis,
-                                maxLines = 1,
-                                style = MaterialTheme.typography.headlineSmall,
-                            )
-                        }
-                    },
-                    onDismiss = { showSleepTimerDialog = false },
-                    onConfirm = {
-                        showSleepTimerDialog = false
-                        playerConnection.service.sleepTimer.start(sleepTimerValue.roundToInt())
-                    },
-                    onCancel = {
-                        showSleepTimerDialog = false
-                    },
-                    onReset = {
-                        sleepTimerValue = 30f // Default value
-                    },
-                    content = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = pluralStringResource(
-                                    R.plurals.minute,
-                                    sleepTimerValue.roundToInt(),
-                                    sleepTimerValue.roundToInt()
-                                ),
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-
-                            Spacer(Modifier.height(16.dp))
-
-                            Slider(
-                                value = sleepTimerValue,
-                                onValueChange = { sleepTimerValue = it },
-                                valueRange = 5f..120f,
-                                steps = (120 - 5) / 5 - 1,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(Modifier.height(8.dp))
-
-                            OutlinedButton(
-                                onClick = {
-                                    showSleepTimerDialog = false
-                                    playerConnection.service.sleepTimer.start(-1)
-                                }
-                            ) {
-                                Text(stringResource(R.string.end_of_song))
-                            }
-                        }
-                    }
+                SleepTimerDialog(
+                    onDismiss = { showSleepTimerDialog = false }
                 )
             }
         },
@@ -953,12 +897,15 @@ private fun BoxScope.QueueMainContent(
             }
         }
 
-        Column(
-            modifier =
-            Modifier
-                .fillMaxSize()
-                .background(background),
+        CompositionLocalProvider(
+            LocalContentColor provides TextBackgroundColor
         ) {
+            Column(
+                modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(background),
+            ) {
             Column(
                 modifier =
                 Modifier
@@ -980,111 +927,105 @@ private fun BoxScope.QueueMainContent(
                         }
                     ),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(mediaMetadata?.thumbnailUrl)
-                            .size(CoilSize(thumbnailPx(48.dp), thumbnailPx(48.dp)))
-                            .crossfade(false)
-                            .build(),
-                        contentDescription = null,
+                if (isSheet) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = mediaMetadata?.title.orEmpty(),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = TextBackgroundColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = mediaMetadata?.artists?.joinToString { it.name }.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextBackgroundColor.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-
-                    val likeDescription = if (currentSong?.song?.liked == true) stringResource(R.string.action_remove_like) else stringResource(R.string.action_like)
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                        tooltip = { PlainTooltip { Text(likeDescription) } },
-                        state = rememberTooltipState(),
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        FilledTonalIconButton(
-                            onClick = playerConnection::toggleLike,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(
-                                    if (currentSong?.song?.liked == true) R.drawable.favorite
-                                    else R.drawable.favorite_border
-                                ),
-                                contentDescription = likeDescription,
-                                tint = if (currentSong?.song?.liked == true) MaterialTheme.colorScheme.error else LocalContentColor.current
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(mediaMetadata?.thumbnailUrl)
+                                .size(CoilSize(thumbnailPx(48.dp), thumbnailPx(48.dp)))
+                                .crossfade(false)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = mediaMetadata?.title.orEmpty(),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = TextBackgroundColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = mediaMetadata?.artists?.joinToString { it.name }.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextBackgroundColor.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
-                    }
 
-                    val lockDescription = if (locked) stringResource(R.string.unlock_queue) else stringResource(R.string.lock_queue)
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                        tooltip = { PlainTooltip { Text(lockDescription) } },
-                        state = rememberTooltipState(),
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = { locked = !locked },
-                            modifier = Modifier.padding(end = 8.dp)
+                        val likeDescription = if (currentSong?.song?.liked == true) stringResource(R.string.action_remove_like) else stringResource(R.string.action_like)
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text(likeDescription) } },
+                            state = rememberTooltipState(),
                         ) {
-                            Icon(
-                                painter = painterResource(if (locked) R.drawable.lock else R.drawable.lock_open),
-                                contentDescription = lockDescription,
-                            )
-                        }
-                    }
-
-                    val moreDescription = stringResource(R.string.more_options)
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                        tooltip = { PlainTooltip { Text(moreDescription) } },
-                        state = rememberTooltipState(),
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                menuState.show {
-                                    PlayerMenu(
-                                        mediaMetadata = mediaMetadata,
-                                        navController = navController,
-                                        playerBottomSheetState = playerBottomSheetState,
-                                        onShowDetailsDialog = {
-                                            mediaMetadata?.id?.let {
-                                                bottomSheetPageState.show {
-                                                    ShowMediaInfo(it)
-                                                }
-                                            }
-                                        },
-                                        onDismiss = menuState::dismiss
-                                    )
-                                }
+                            FilledTonalIconButton(
+                                onClick = playerConnection::toggleLike,
+                                modifier = Modifier.padding(end = 8.dp),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = TextBackgroundColor.copy(alpha = 0.12f),
+                                    contentColor = TextBackgroundColor
+                                )
+                            ) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (currentSong?.song?.liked == true) R.drawable.favorite
+                                        else R.drawable.favorite_border
+                                    ),
+                                    contentDescription = likeDescription,
+                                    tint = if (currentSong?.song?.liked == true) MaterialTheme.colorScheme.error else TextBackgroundColor
+                                )
                             }
+                        }
+
+                        val moreDescription = stringResource(R.string.more_options)
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text(moreDescription) } },
+                            state = rememberTooltipState(),
                         ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = moreDescription,
-                            )
+                            FilledTonalIconButton(
+                                onClick = {
+                                    menuState.show {
+                                        PlayerMenu(
+                                            mediaMetadata = mediaMetadata,
+                                            navController = navController,
+                                            playerBottomSheetState = playerBottomSheetState,
+                                            onShowDetailsDialog = {
+                                                mediaMetadata?.id?.let {
+                                                    bottomSheetPageState.show {
+                                                        ShowMediaInfo(it)
+                                                    }
+                                                }
+                                            },
+                                            onDismiss = menuState::dismiss
+                                        )
+                                    }
+                                },
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = TextBackgroundColor.copy(alpha = 0.12f),
+                                    contentColor = TextBackgroundColor
+                                )
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.more_vert),
+                                    contentDescription = moreDescription,
+                                    tint = TextBackgroundColor
+                                )
+                            }
                         }
                     }
                 }
@@ -1109,10 +1050,10 @@ private fun BoxScope.QueueMainContent(
                         enabled = !isListenTogetherGuest,
                         shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
                         colors = ToggleButtonDefaults.toggleButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            containerColor = TextBackgroundColor.copy(alpha = 0.12f),
+                            contentColor = TextBackgroundColor.copy(alpha = 0.85f),
+                            checkedContainerColor = TextBackgroundColor.copy(alpha = 0.35f),
+                            checkedContentColor = TextBackgroundColor
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -1140,10 +1081,10 @@ private fun BoxScope.QueueMainContent(
                         enabled = !isListenTogetherGuest,
                         shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
                         colors = ToggleButtonDefaults.toggleButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            containerColor = TextBackgroundColor.copy(alpha = 0.12f),
+                            contentColor = TextBackgroundColor.copy(alpha = 0.85f),
+                            checkedContainerColor = TextBackgroundColor.copy(alpha = 0.35f),
+                            checkedContentColor = TextBackgroundColor
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -1178,10 +1119,10 @@ private fun BoxScope.QueueMainContent(
                         enabled = !isListenTogetherGuest,
                         shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                         colors = ToggleButtonDefaults.toggleButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            containerColor = TextBackgroundColor.copy(alpha = 0.12f),
+                            contentColor = TextBackgroundColor.copy(alpha = 0.85f),
+                            checkedContainerColor = TextBackgroundColor.copy(alpha = 0.35f),
+                            checkedContentColor = TextBackgroundColor
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -1228,24 +1169,67 @@ private fun BoxScope.QueueMainContent(
                         )
                     }
 
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.n_song,
-                                queueWindows.size,
-                                queueWindows.size
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextBackgroundColor.copy(alpha = 0.7f)
-                        )
-                        Text(
-                            text = makeTimeString(queueLength * 1000L),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextBackgroundColor.copy(alpha = 0.7f)
-                        )
+                        val lockDescription = if (locked) stringResource(R.string.unlock_queue) else stringResource(R.string.lock_queue)
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text(lockDescription) } },
+                            state = rememberTooltipState(),
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    locked = !locked
+                                },
+                                modifier = Modifier.size(38.dp),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = if (locked) {
+                                        TextBackgroundColor.copy(alpha = 0.35f)
+                                    } else {
+                                        TextBackgroundColor.copy(alpha = 0.12f)
+                                    },
+                                    contentColor = TextBackgroundColor
+                                )
+                            ) {
+                                AnimatedContent(
+                                    targetState = locked,
+                                    transitionSpec = {
+                                        (scaleIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn()) togetherWith
+                                                (scaleOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut())
+                                    },
+                                    label = "QueueLockAnimation"
+                                ) { isLocked ->
+                                    Icon(
+                                        painter = painterResource(if (isLocked) R.drawable.lock else R.drawable.lock_open),
+                                        contentDescription = lockDescription,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = pluralStringResource(
+                                    R.plurals.n_song,
+                                    queueWindows.size,
+                                    queueWindows.size
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextBackgroundColor.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = makeTimeString(queueLength * 1000L),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextBackgroundColor.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
 
@@ -1417,6 +1401,8 @@ private fun BoxScope.QueueMainContent(
                                         isPlaying = isPlaying && isActive,
                                         shape = listItemShape(index, mutableQueueWindows.size),
                                         flat = true,
+                                        titleColor = TextBackgroundColor,
+                                        subtitleColor = TextBackgroundColor.copy(alpha = 0.7f),
                                         trailingContent = {
                                             if (inSelectMode) {
                                                 Checkbox(
@@ -1552,6 +1538,8 @@ private fun BoxScope.QueueMainContent(
                                     mediaMetadata = item.metadata!!,
                                     shape = listItemShape(index, automix.size),
                                     flat = true,
+                                    titleColor = TextBackgroundColor,
+                                    subtitleColor = TextBackgroundColor.copy(alpha = 0.7f),
                                     trailingContent = {
                                         if (!isListenTogetherGuest) {
                                             IconButton(
@@ -1625,6 +1613,7 @@ private fun BoxScope.QueueMainContent(
                         )
                         .align(Alignment.BottomCenter),
                 )
+            }
         }
     }
 }

@@ -48,13 +48,19 @@ import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.runtime.Composable
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.runtime.getValue
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.convx.music.ui.utils.appTopBarWindowInsets
-import androidx.compose.runtime.setValue
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.convx.music.api.DeepLService
+import com.convx.music.api.OpenRouterService
+import com.convx.music.constants.ContentLanguageKey
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import androidx.compose.ui.res.painterResource
@@ -113,6 +119,19 @@ fun AiSettings(
     var translateMode by rememberPreference(TranslateModeKey, "Literal")
     var deeplApiKey by rememberPreference(DeeplApiKey, "")
     var deeplFormality by rememberPreference(DeeplFormalityKey, "default")
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val (contentLanguage) = rememberPreference(ContentLanguageKey, "system")
+
+    LaunchedEffect(Unit) {
+        if (translateLanguage == "en" && contentLanguage != "system" && contentLanguage.isNotBlank()) {
+            translateLanguage = contentLanguage
+        }
+    }
+
+    var isTestingKey by remember { mutableStateOf(false) }
+    var testResultDialogText by remember { mutableStateOf<String?>(null) }
 
     val aiProviders = mapOf(
         "OpenRouter" to "https://openrouter.ai/api/v1/chat/completions",
@@ -201,6 +220,19 @@ fun AiSettings(
     var showBaseUrlDialog by rememberSaveable { mutableStateOf(false) }
     var showModelDialog by rememberSaveable { mutableStateOf(false) }
     var showCustomModelInput by rememberSaveable { mutableStateOf(false) }
+
+    if (testResultDialogText != null) {
+        AlertDialog(
+            onDismissRequest = { testResultDialogText = null },
+            confirmButton = {
+                TextButton(onClick = { testResultDialogText = null }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            title = { Text("Test API Key") },
+            text = { Text(testResultDialogText ?: "") }
+        )
+    }
 
     if (showProviderHelpDialog) {
         AlertDialog(
@@ -532,6 +564,60 @@ fun AiSettings(
                         )
                     }
                 }
+
+                add(
+                    Material3SettingsItem(
+                        icon = painterResource(R.drawable.link),
+                        title = { Text("Test API Key & Connection") },
+                        description = {
+                            Text(if (isTestingKey) "Menguji koneksi..." else "Uji validitas API key dan koneksi ke AI provider")
+                        },
+                        trailingContent = {
+                            if (isTestingKey) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        },
+                        enabled = !isTestingKey,
+                        onClick = {
+                            val effectiveApiKey = if (aiProvider == "DeepL") deeplApiKey else openRouterApiKey
+                            if (effectiveApiKey.isBlank()) {
+                                Toast.makeText(context, context.getString(R.string.ai_api_key_required), Toast.LENGTH_SHORT).show()
+                            } else {
+                                isTestingKey = true
+                                coroutineScope.launch {
+                                    val result = if (aiProvider == "DeepL") {
+                                        DeepLService.translate(
+                                            text = "Hello",
+                                            targetLanguage = translateLanguage,
+                                            apiKey = deeplApiKey,
+                                            formality = deeplFormality,
+                                            maxRetries = 1
+                                        )
+                                    } else {
+                                        val fullLanguageName = LanguageCodeToName[translateLanguage] ?: translateLanguage
+                                        OpenRouterService.translate(
+                                            text = "Hello",
+                                            targetLanguage = fullLanguageName,
+                                            apiKey = openRouterApiKey,
+                                            baseUrl = openRouterBaseUrl,
+                                            model = openRouterModel,
+                                            mode = translateMode,
+                                            maxRetries = 1
+                                        )
+                                    }
+                                    isTestingKey = false
+                                    testResultDialogText = result.fold(
+                                        onSuccess = { "✅ Berhasil terkoneksi!\nRespons tes: ${it.firstOrNull() ?: "OK"}" },
+                                        onFailure = { "❌ Gagal terkoneksi:\n${it.message}" }
+                                    )
+                                }
+                            }
+                        }
+                    )
+                )
             }
         )
 

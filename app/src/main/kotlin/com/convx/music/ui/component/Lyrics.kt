@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -104,6 +105,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -121,6 +123,7 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
 import com.convx.music.LocalDatabase
+import com.convx.music.models.toMediaMetadata
 import com.convx.music.LocalListenTogetherManager
 import com.convx.music.LocalPlayerConnection
 import com.convx.music.R
@@ -211,6 +214,7 @@ fun Lyrics(
     val playerConnection = LocalPlayerConnection.current ?: return
     val database = LocalDatabase.current
     val menuState = LocalMenuState.current
+    val bottomSheetPageState = LocalBottomSheetPageState.current
     val density = LocalDensity.current
     val context = LocalContext.current
     val configuration = LocalWindowInfo.current
@@ -467,17 +471,18 @@ fun Lyrics(
         }
     }
 
-    // Active fetch trigger: if lyricsEntity is null or provider is invalid or lyrics corrupted, fetch immediately in background
+    // Active fetch trigger: if lyricsEntity is null or provider is invalid or lyrics corrupted, fetch in background
     LaunchedEffect(mediaMetadata?.id, mediaMetadata?.duration, rawLyricsEntity, showLyrics) {
         val meta = mediaMetadata
         if (showLyrics && meta != null) {
             val raw = rawLyricsEntity
             val isInvalid = raw != null && raw.provider !in allowedProviders
             val isCorrupted = raw != null && meta.duration > 0 && !isValidLrcForDuration(raw.lyrics, meta.duration)
+
             if (raw == null || isInvalid || isCorrupted) {
                 withContext(Dispatchers.IO) {
                     try {
-                        if (isCorrupted && raw != null) {
+                        if (isCorrupted) {
                             database.query { delete(raw) }
                         }
                         val entryPoint = EntryPointAccessors.fromApplication(
@@ -756,6 +761,79 @@ fun Lyrics(
             .fillMaxSize()
             .padding(bottom = 12.dp)
     ) {
+        // Provider badge and 3-dot lyrics menu at top right (always available in landscape and portrait)
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .zIndex(2f)
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
+                .padding(top = 8.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            lyricsEntity?.let { entity ->
+                if (entity.provider.isNotBlank() && entity.provider != "Unknown" && lyrics != null && lyrics != LYRICS_NOT_FOUND) {
+                    val isSynced = lyrics.startsWith("[")
+                    Text(
+                        text = when {
+                            entity.provider == "LrcLib" && isSynced -> "LrcLib ♪ Karaoke"
+                            entity.provider == "LrcLib" -> "LrcLib"
+                            entity.provider.startsWith("YouTube") -> "YouTube"
+                            else -> entity.provider
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // 3-dot menu button (ensures tablet and landscape modes always have access to lyrics options)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .clickable {
+                        menuState.show {
+                            com.convx.music.ui.menu.LyricsMenu(
+                                lyricsProvider = { lyricsEntity },
+                                songProvider = { currentSong?.song },
+                                mediaMetadataProvider = {
+                                    currentSong?.toMediaMetadata() ?: com.convx.music.models.MediaMetadata(
+                                        id = "",
+                                        title = "",
+                                        artists = emptyList(),
+                                        duration = 0
+                                    )
+                                },
+                                onDismiss = menuState::dismiss,
+                                onShowOffsetDialog = {
+                                    bottomSheetPageState.show {
+                                        com.convx.music.ui.utils.ShowOffsetDialog(
+                                            songProvider = { currentSong?.song }
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.more_vert),
+                    contentDescription = stringResource(R.string.lyrics),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
         // Status UI for translation
         Box(
             modifier = Modifier
@@ -940,13 +1018,14 @@ fun Lyrics(
             if (isLyricsProviderShown) {
                 item {
                     Text(
-                        text = "Lyrics from ${lyricsEntity?.provider}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        fontWeight = FontWeight.Medium,
+                        text = "Lyrics · ${lyricsEntity?.provider}",
+                        fontSize = 10.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.45f),
+                        fontWeight = FontWeight.Normal,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = 12.dp, vertical = 2.dp)
                     )
                 }
             }

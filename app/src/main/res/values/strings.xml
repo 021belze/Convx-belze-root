@@ -248,6 +248,14 @@
     <string name="lyrics_not_found">Lyrics not found</string>
     <string name="sleep_timer">Sleep timer</string>
     <string name="end_of_song">End of song</string>
+    <string name="sleep_timer_off">Off</string>
+    <string name="sleep_timer_active">Active</string>
+    <string name="sleep_timer_cancel">Turn off timer</string>
+    <string name="sleep_timer_stop_in">Stops in %s</string>
+    <string name="sleep_timer_end_of_track">Stops after current track</string>
+    <string name="sleep_timer_select_duration">Select duration or end of song</string>
+    <string name="sleep_timer_start">Start timer</string>
+    <string name="sleep_timer_extend">+%d min</string>
     <plurals name="minute">
         <item quantity="one">1 minute</item>
         <item quantity="other">%d minutes</item>

@@ -61,7 +61,10 @@ class WrappedManager(
                     val toTimestamp = Calendar.getInstance().apply {
                         set(WrappedConstants.YEAR, Calendar.DECEMBER, 31, 23, 59, 59)
                     }.timeInMillis
-                    val allSongs = databaseDao.mostPlayedSongsStats(fromTimestamp, toTimeStamp = toTimestamp, limit = -1).first()
+                    var allSongs = databaseDao.mostPlayedSongsStats(fromTimestamp, toTimeStamp = toTimestamp, limit = -1).first()
+                    if (allSongs.isEmpty()) {
+                        allSongs = databaseDao.mostPlayedSongsStats(0L, toTimeStamp = toTimestamp, limit = -1).first()
+                    }
 
                     val playlistId = UUID.randomUUID().toString()
 
@@ -110,9 +113,9 @@ class WrappedManager(
         withContext(Dispatchers.IO) {
             val playlistMap = mutableMapOf<WrappedScreenType, String>()
 
-            // Intro Part: Random song from top 6-30
-            val introSongPool = topSongs.subList(5, topSongs.size)
-            val introSong = introSongPool.randomOrNull()?.id ?: topSongs.last().id
+            // Intro Part: Random song from top 6-30 (or fallback to available songs)
+            val introSongPool = if (topSongs.size > 5) topSongs.subList(5, topSongs.size) else topSongs
+            val introSong = introSongPool.randomOrNull()?.id ?: topSongs.first().id
             playlistMap[WrappedScreenType.Welcome] = introSong
             playlistMap[WrappedScreenType.MinutesTease] = introSong
             playlistMap[WrappedScreenType.MinutesReveal] = introSong
@@ -135,7 +138,7 @@ class WrappedManager(
 
             // Artist Part: Top artist's song with specific rule
             val topArtist = topArtists.firstOrNull()
-            val fromTimestamp = Calendar.getInstance().apply {
+            val fromTimestamp = if (_state.value.isAllTimeFallback) 0L else Calendar.getInstance().apply {
                 set(WrappedConstants.YEAR, Calendar.JANUARY, 1, 0, 0, 0)
             }.timeInMillis
             val toTimestamp = Calendar.getInstance().apply {
@@ -168,9 +171,15 @@ class WrappedManager(
             playlistMap[WrappedScreenType.TopArtistReveal] = artistSong
             playlistMap[WrappedScreenType.Top5Artists] = artistSong
 
-            // End Part
-            val endSongPool = topSongs.subList(2, 5)
-            val endSong = endSongPool.randomOrNull()?.id ?: topSongs[2].id
+            // End Part: Safe sublist bounds
+            val endSongPool = if (topSongs.size >= 5) {
+                topSongs.subList(2, 5)
+            } else if (topSongs.size > 2) {
+                topSongs.subList(2, topSongs.size)
+            } else {
+                topSongs
+            }
+            val endSong = endSongPool.randomOrNull()?.id ?: topSongs.getOrNull(2)?.id ?: topSongs.first().id
             playlistMap[WrappedScreenType.Playlist] = endSong
             playlistMap[WrappedScreenType.Conclusion] = "2-p9DM2Xvsc"
 
@@ -213,11 +222,30 @@ class WrappedManager(
             )
 
             @Suppress("UNCHECKED_CAST")
-            val topSongsResult = results[1] as List<SongWithStats>
+            var topSongsResult = results[1] as List<SongWithStats>
             @Suppress("UNCHECKED_CAST")
-            val topAlbumsResult = results[3] as List<com.convx.music.db.entities.Album>
+            var topArtistsResult = results[2] as List<Artist>
             @Suppress("UNCHECKED_CAST")
-            val topArtistsResult = results[2] as List<Artist>
+            var topAlbumsResult = results[3] as List<com.convx.music.db.entities.Album>
+            var uniqueSongCount = results[4] as Int
+            var uniqueArtistCount = results[5] as Int
+            var totalAlbums = results[6] as Int
+            var totalMinutes = (results[7] as Long) / 1000 / 60
+            var isAllTime = false
+
+            // Fallback to all-time stats if current year has no data
+            if (topSongsResult.isEmpty()) {
+                Timber.tag("WrappedManager").d("No playback events found for ${WrappedConstants.YEAR}, falling back to all-time playback history")
+                isAllTime = true
+                topSongsResult = databaseDao.mostPlayedSongsStats(0L, toTimeStamp = toTimestamp, limit = 30).first()
+                topArtistsResult = databaseDao.mostPlayedArtists(0L, toTimeStamp = toTimestamp, limit = 5).first()
+                topAlbumsResult = databaseDao.mostPlayedAlbums(0L, toTimeStamp = toTimestamp, limit = 5).first()
+                uniqueSongCount = databaseDao.getUniqueSongCountInRange(0L, toTimestamp).first()
+                uniqueArtistCount = databaseDao.getUniqueArtistCountInRange(0L, toTimestamp).first()
+                totalAlbums = databaseDao.getUniqueAlbumCountInRange(0L, toTimestamp).first()
+                totalMinutes = (databaseDao.getTotalPlayTimeInRange(0L, toTimestamp).first() ?: 0L) / 1000 / 60
+            }
+
             _state.update {
                 it.copy(
                     accountInfo = results[0] as AccountInfo?,
@@ -225,10 +253,11 @@ class WrappedManager(
                     topArtists = topArtistsResult,
                     top5Albums = topAlbumsResult,
                     topAlbum = topAlbumsResult.firstOrNull(),
-                    uniqueSongCount = results[4] as Int,
-                    uniqueArtistCount = results[5] as Int,
-                    totalAlbums = results[6] as Int,
-                    totalMinutes = (results[7] as Long) / 1000 / 60
+                    uniqueSongCount = uniqueSongCount,
+                    uniqueArtistCount = uniqueArtistCount,
+                    totalAlbums = totalAlbums,
+                    totalMinutes = totalMinutes,
+                    isAllTimeFallback = isAllTime
                 )
             }
         }

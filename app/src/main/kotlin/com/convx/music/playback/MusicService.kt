@@ -92,6 +92,7 @@ import com.convx.music.constants.AudioOffload
 import com.convx.music.constants.AudioQualityKey
 import com.convx.music.constants.EnableTidalStreamingKey
 import com.convx.music.constants.EnableSaavnStreamingKey
+import com.convx.music.constants.SaavnAudioQualityKey
 import com.convx.music.constants.EnabledModulesKey
 import com.convx.music.constants.AutoLoadMoreKey
 import com.convx.music.constants.AutoSkipNextOnErrorKey
@@ -332,6 +333,68 @@ class MusicService :
 
     // Last DB write per media id, to coalesce the ~3s ExoPlayer stats reports.
     private val lastStatsWriteAt = HashMap<String, Long>()
+
+    // Active track history tracking
+    private var activeSongId: String? = null
+    private var activeSongPlayStartTimeMs: Long = 0L
+    private var activeSongAccumulatedPlayTimeMs: Long = 0L
+    private var activeSongRecorded: Boolean = false
+    private var activeSongDurationMs: Long = 0L
+
+    private fun getHistoryThresholdMs(songDurationMs: Long): Long {
+        val configuredMs = (dataStore.get(HistoryDuration, 30f) * 1000f).toLong().coerceAtLeast(5_000L)
+        return if (songDurationMs > 0L) {
+            minOf(configuredMs, maxOf(10_000L, (songDurationMs * 0.3f).toLong()))
+        } else {
+            minOf(configuredMs, 15_000L)
+        }
+    }
+
+    private fun recordHistoryForActiveSong(playTimeMs: Long) {
+        val songId = activeSongId ?: return
+        if (activeSongRecorded) return
+        if (dataStore.get(PauseListenHistoryKey, false)) return
+
+        activeSongRecorded = true
+        lastStatsWriteAt[songId] = System.currentTimeMillis()
+
+        database.query {
+            incrementTotalPlayTime(songId, playTimeMs)
+            try {
+                insert(
+                    Event(
+                        songId = songId,
+                        timestamp = LocalDateTime.now(),
+                        playTime = playTimeMs,
+                    ),
+                )
+            } catch (_: SQLException) {
+            }
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val playbackUrl = database.format(songId).first()?.playbackUrl
+                ?: YTPlayerUtils.playerResponseForMetadata(songId, null)
+                    .getOrNull()?.playbackTracking?.videostatsPlaybackUrl?.baseUrl
+            playbackUrl?.let {
+                YouTube.registerPlayback(null, playbackUrl).onFailure {
+                    reportException(it)
+                }
+            }
+        }
+    }
+
+    private fun flushActiveSongHistory() {
+        val songId = activeSongId ?: return
+        if (!activeSongRecorded) {
+            val now = System.currentTimeMillis()
+            val total = activeSongAccumulatedPlayTimeMs + (if (activeSongPlayStartTimeMs > 0L) (now - activeSongPlayStartTimeMs) else 0L)
+            val dur = if (activeSongDurationMs > 0L) activeSongDurationMs else player.duration
+            if (total >= getHistoryThresholdMs(dur)) {
+                recordHistoryForActiveSong(total)
+            }
+        }
+    }
 
     private val binder = MusicBinder()
 
@@ -706,21 +769,25 @@ class MusicService :
             }
         }
 
-        // Watch for audio quality setting changes
+        // Watch for audio quality and stream source setting changes
         var isFirstQualityEmit = true
         scope.launch {
             dataStore.data
                 .map { prefs ->
-                    if (prefs[DataSaverEnabledKey] ?: false) {
+                    val ytQuality = if (prefs[DataSaverEnabledKey] ?: false) {
                         com.convx.music.constants.AudioQuality.LOW
                     } else {
                         prefs[AudioQualityKey]?.let { value ->
                             com.convx.music.constants.AudioQuality.entries.find { it.name == value }
                         } ?: com.convx.music.constants.AudioQuality.AUTO
                     }
+                    val saavnQuality = prefs[SaavnAudioQualityKey] ?: ""
+                    val saavnOn = prefs[EnableSaavnStreamingKey] ?: false
+                    val tidalOn = prefs[EnableTidalStreamingKey] ?: false
+                    listOf(ytQuality.name, saavnQuality, saavnOn.toString(), tidalOn.toString()) to ytQuality
                 }
-                .distinctUntilChanged()
-                .collect { newQuality ->
+                .distinctUntilChanged { old, new -> old.first == new.first }
+                .collect { (composite, newQuality) ->
                     val oldQuality = audioQuality
                     audioQuality = newQuality
 
@@ -731,7 +798,7 @@ class MusicService :
                         return@collect
                     }
 
-                    Timber.tag("MusicService").i("QUALITY CHANGED: $oldQuality -> $newQuality")
+                    Timber.tag("MusicService").i("QUALITY/SOURCE CHANGED: $oldQuality -> $newQuality (settings=$composite)")
 
                     // Reload current song with new quality
                     val mediaId = player.currentMediaItem?.mediaId ?: return@collect
@@ -741,13 +808,18 @@ class MusicService :
 
                     Timber.tag("MusicService").i("RELOADING STREAM: $mediaId at position ${currentPosition}ms")
 
-                    // Clear cached URL to force fresh fetch
+                    // Clear cached URL across all namespaces to force fresh fetch
                     songUrlCache.remove(mediaId)
+                    songUrlCache.remove("$mediaId#flac")
+                    songUrlCache.remove("$mediaId#saavn")
+                    YTPlayerUtils.clearSaavnCache(mediaId)
 
                     // CRITICAL: Clear caches synchronously to prevent format parsing errors
                     runBlocking(Dispatchers.IO) {
                         try {
                             playerCache.removeResource(mediaId)
+                            playerCache.removeResource("$mediaId#flac")
+                            playerCache.removeResource("$mediaId#saavn")
                             downloadCache.removeResource(mediaId)
                             Timber.tag("MusicService").d("Cleared player and download cache for $mediaId")
                         } catch (e: Exception) {
@@ -788,8 +860,11 @@ class MusicService :
                     val currentIndex = player.currentMediaItemIndex
                     val wasPlaying = player.isPlaying
 
-                    // Clear cached URL
+                    // Clear cached URL across all stream namespaces
                     songUrlCache.remove(mediaId)
+                    songUrlCache.remove("$mediaId#flac")
+                    songUrlCache.remove("$mediaId#saavn")
+                    YTPlayerUtils.clearSaavnCache(mediaId)
 
                     // Reload player
                     player.stop()
@@ -2091,6 +2166,13 @@ class MusicService :
         mediaItem: MediaItem?,
         reason: Int,
     ) {
+        flushActiveSongHistory()
+        activeSongId = mediaItem?.mediaId
+        activeSongPlayStartTimeMs = if (player.isPlaying) System.currentTimeMillis() else 0L
+        activeSongAccumulatedPlayTimeMs = 0L
+        activeSongRecorded = false
+        activeSongDurationMs = player.duration.coerceAtLeast(0L)
+
         Timber.tag(TAG).d(
             "SKIP_DEBUG onMediaItemTransition: reason=$reason (0=REPEAT,1=AUTO,2=SEEK,3=PLAYLIST_CHANGED) " +
                 "newIndex=${player.currentMediaItemIndex} newId=${mediaItem?.mediaId} " +
@@ -2278,6 +2360,18 @@ class MusicService :
 
         // Widget and Discord RPC updates
         if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED)) {
+            if (player.isPlaying) {
+                activeSongPlayStartTimeMs = System.currentTimeMillis()
+                if (activeSongDurationMs <= 0L && player.duration > 0L) {
+                    activeSongDurationMs = player.duration
+                }
+            } else {
+                if (activeSongPlayStartTimeMs > 0L) {
+                    activeSongAccumulatedPlayTimeMs += (System.currentTimeMillis() - activeSongPlayStartTimeMs)
+                    activeSongPlayStartTimeMs = 0L
+                }
+                flushActiveSongHistory()
+            }
             updateWidgetUI(player.isPlaying)
             if (player.isPlaying) {
                 startWidgetUpdates()
@@ -2670,22 +2764,27 @@ class MusicService :
     private fun performAggressiveCacheClear(mediaId: String) {
         Timber.tag(TAG).d("Performing aggressive cache clear for $mediaId")
 
-        // Clear URL cache. Lossless/Spine streams live under the "#flac"
-        // namespace (see createDataSourceFactory's effKey), so clearing only the
-        // plain id left a half-written FLAC body in place: every later resolve
-        // read those bytes back and failed with the same
-        // ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, forever.
+        // Clear URL cache across all stream namespaces
         songUrlCache.remove(mediaId)
         songUrlCache.remove("$mediaId#flac")
+        songUrlCache.remove("$mediaId#saavn")
 
-        // Clear player cache
-        for (key in listOf(mediaId, "$mediaId#flac")) {
+        // Clear player cache across all stream namespaces
+        for (key in listOf(mediaId, "$mediaId#flac", "$mediaId#saavn")) {
             try {
                 playerCache.removeResource(key)
                 Timber.tag(TAG).d("Cleared player cache for $key")
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to clear player cache for $key")
             }
+        }
+
+        // Clear Saavn in-memory playback cache and reset circuit breaker
+        try {
+            YTPlayerUtils.clearSaavnCache(mediaId)
+            Timber.tag(TAG).d("Cleared Saavn playback cache for $mediaId")
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to clear Saavn cache for $mediaId")
         }
 
         // Clear decryption caches
@@ -2933,9 +3032,18 @@ class MusicService :
 
         incrementRetryCount(mediaId)
 
-        // Clear the cached URL
+        // Clear cached URLs across all stream namespaces
         songUrlCache.remove(mediaId)
-        Timber.tag(TAG).d("Cleared cached URL for $mediaId")
+        songUrlCache.remove("$mediaId#flac")
+        songUrlCache.remove("$mediaId#saavn")
+        Timber.tag(TAG).d("Cleared cached URLs for $mediaId")
+
+        // Clear Saavn in-memory playback cache
+        try {
+            YTPlayerUtils.clearSaavnCache(mediaId)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to clear Saavn cache")
+        }
 
         // Clear decryption caches
         try {
@@ -3607,6 +3715,7 @@ class MusicService :
 
     override fun onDestroy() {
         isRunning = false
+        flushActiveSongHistory()
 
         try {
             unregisterReceiver(screenStateReceiver)
@@ -3787,6 +3896,13 @@ class MusicService :
             while (isActive) {
                 if (player.isPlaying) {
                     updateWidgetUI(true)
+                    if (!activeSongRecorded && activeSongId != null) {
+                        val currentPlayTime = activeSongAccumulatedPlayTimeMs + (if (activeSongPlayStartTimeMs > 0L) (System.currentTimeMillis() - activeSongPlayStartTimeMs) else 0L)
+                        val dur = if (activeSongDurationMs > 0L) activeSongDurationMs else player.duration
+                        if (currentPlayTime >= getHistoryThresholdMs(dur)) {
+                            recordHistoryForActiveSong(currentPlayTime)
+                        }
+                    }
                 }
                 delay(200)
             }

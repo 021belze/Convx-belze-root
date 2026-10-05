@@ -9,17 +9,21 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +39,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -51,75 +56,107 @@ fun WrappedTop5SongsScreen(topSongs: List<SongWithStats>, isVisible: Boolean) {
 
     LaunchedEffect(isVisible) {
         if (isVisible) {
-            delay(200)
+            delay(150)
             visible = true
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedBackground(elementCount = 25, shapeTypes = listOf(ShapeType.Rect))
+        AnimatedBackground(elementCount = 20, shapeTypes = listOf(ShapeType.Rect))
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             AnimatedVisibility(
                 visible = visible,
-                enter = fadeIn(animationSpec = tween(1000, delayMillis = 200)) + slideInVertically(animationSpec = tween(1000, delayMillis = 200))
+                enter = fadeIn(animationSpec = tween(800, delayMillis = 150)) + slideInVertically(animationSpec = tween(800, delayMillis = 150))
             ) {
                 Text(
                     text = stringResource(id = R.string.wrapped_top_5_songs_title),
-                    fontSize = 40.sp,
+                    fontSize = 32.sp,
                     fontFamily = bbh_bartle,
                     color = Color.White,
                     textAlign = TextAlign.Center,
-                    lineHeight = 44.sp
+                    lineHeight = 36.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 topSongs.forEachIndexed { index, song ->
                     AnimatedVisibility(
                         visible = visible,
-                        enter = fadeIn(animationSpec = tween(600, delayMillis = 400 + (index * 200))) + slideInVertically(animationSpec = tween(600, delayMillis = 400 + (index * 200)))
+                        enter = fadeIn(animationSpec = tween(500, delayMillis = 300 + (index * 120))) +
+                                slideInVertically(animationSpec = tween(500, delayMillis = 300 + (index * 120)))
                     ) {
+                        val isFirst = index == 0
                         Row(
                             modifier = Modifier
-                                .padding(vertical = 8.dp),
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (isFirst) Color.White.copy(alpha = 0.16f)
+                                    else Color.White.copy(alpha = 0.07f)
+                                )
+                                .border(
+                                    0.5.dp,
+                                    if (isFirst) Color.White.copy(alpha = 0.35f)
+                                    else Color.White.copy(alpha = 0.14f),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "${index + 1}",
                                 fontFamily = bbh_bartle,
-                                fontSize = 36.sp,
-                                color = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.width(40.dp)
+                                fontSize = if (isFirst) 26.sp else 22.sp,
+                                color = if (isFirst) Color(0xFFFFD166) else Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier.width(28.dp),
+                                textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             AsyncImage(
                                 model = song.thumbnailUrl,
                                 contentDescription = "Album art",
                                 modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(10.dp)),
                                 contentScale = ContentScale.Crop
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = song.title,
                                     color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = song.artistName ?: "",
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    fontSize = 14.sp
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            val minutes = song.timeListened?.div(60000) ?: 0
+                            if (minutes > 0) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "$minutes m",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }

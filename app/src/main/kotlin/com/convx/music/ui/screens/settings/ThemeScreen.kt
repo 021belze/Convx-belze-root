@@ -176,6 +176,12 @@ import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.theme.DefaultThemeColor
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.theme.vivimusicTheme
+import com.convx.music.ui.theme.ConvxThemePresets
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.ui.text.font.FontWeight
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.utils.rememberEnumPreference
 import com.convx.music.ui.utils.appTopBarWindowInsets
@@ -205,6 +211,9 @@ fun ThemeScreen(
     )
     val (_, onDynamicThemeChange) = rememberPreference(DynamicThemeKey, defaultValue = true)
 
+    val (backgroundColorInt, onBackgroundColorChange) = rememberPreference(AppBackgroundColorKey, defaultValue = 0)
+    val (textColorInt, onTextColorChange) = rememberPreference(AppTextColorKey, defaultValue = 0)
+
     val selectedThemeColor = Color(selectedThemeColorInt)
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -212,40 +221,89 @@ fun ThemeScreen(
     // Helper function to handle color selection with dynamic theme toggle
     val handleColorSelection: (Color) -> Unit = { color ->
         onSelectedThemeColorChange(color.toArgb())
-        // Enable dynamic theme only when selecting the default/dynamic color
-        // Disable it when selecting any other color
         val isDynamicColor = color == DefaultThemeColor
         onDynamicThemeChange(isDynamicColor)
     }
 
-    // Mode + color back to their defaults. Doesn't touch the home background
-    // image below — that already has its own "Remove image" action, and
-    // clearing it here would silently delete a file the user picked.
+    val onThemeModeSelect: (DarkMode, Boolean) -> Unit = { newMode, newPureBlack ->
+        onDarkModeChange(newMode)
+        onPureBlackChange(newPureBlack)
+        when {
+            newMode == DarkMode.AUTO -> {
+                onBackgroundColorChange(0)
+                onTextColorChange(0)
+            }
+            newMode == DarkMode.OFF -> {
+                onBackgroundColorChange(ConvxThemePresets.LightBackground.toArgb())
+                onTextColorChange(ConvxThemePresets.LightText.toArgb())
+            }
+            newMode == DarkMode.ON && !newPureBlack -> {
+                onBackgroundColorChange(ConvxThemePresets.DarkBackground.toArgb())
+                onTextColorChange(ConvxThemePresets.DarkText.toArgb())
+            }
+            newMode == DarkMode.ON && newPureBlack -> {
+                onBackgroundColorChange(ConvxThemePresets.PureBlackBackground.toArgb())
+                onTextColorChange(ConvxThemePresets.PureBlackText.toArgb())
+            }
+        }
+    }
+
+    val onResetToConvxDefault: () -> Unit = {
+        when {
+            darkMode == DarkMode.AUTO -> {
+                onBackgroundColorChange(0)
+                onTextColorChange(0)
+            }
+            darkMode == DarkMode.OFF -> {
+                onBackgroundColorChange(ConvxThemePresets.LightBackground.toArgb())
+                onTextColorChange(ConvxThemePresets.LightText.toArgb())
+            }
+            darkMode == DarkMode.ON && !pureBlack -> {
+                onBackgroundColorChange(ConvxThemePresets.DarkBackground.toArgb())
+                onTextColorChange(ConvxThemePresets.DarkText.toArgb())
+            }
+            darkMode == DarkMode.ON && pureBlack -> {
+                onBackgroundColorChange(ConvxThemePresets.PureBlackBackground.toArgb())
+                onTextColorChange(ConvxThemePresets.PureBlackText.toArgb())
+            }
+        }
+    }
+
     val onReset: () -> Unit = {
         onDarkModeChange(DarkMode.AUTO)
         onPureBlackChange(false)
         onSelectedThemeColorChange(DefaultThemeColor.toArgb())
         onDynamicThemeChange(true)
+        onBackgroundColorChange(0)
+        onTextColorChange(0)
     }
 
     if (isLandscape) {
         LandscapeThemeLayout(
             darkMode = darkMode,
-            onDarkModeChange = onDarkModeChange,
             pureBlack = pureBlack,
-            onPureBlackChange = onPureBlackChange,
+            onThemeModeSelect = onThemeModeSelect,
             selectedThemeColor = selectedThemeColor,
             onSelectedThemeColorChange = handleColorSelection,
+            backgroundColorInt = backgroundColorInt,
+            onBackgroundColorChange = onBackgroundColorChange,
+            textColorInt = textColorInt,
+            onTextColorChange = onTextColorChange,
+            onResetToConvxDefault = onResetToConvxDefault,
             onReset = onReset,
         )
     } else {
         PortraitThemeLayout(
             darkMode = darkMode,
-            onDarkModeChange = onDarkModeChange,
             pureBlack = pureBlack,
-            onPureBlackChange = onPureBlackChange,
+            onThemeModeSelect = onThemeModeSelect,
             selectedThemeColor = selectedThemeColor,
             onSelectedThemeColorChange = handleColorSelection,
+            backgroundColorInt = backgroundColorInt,
+            onBackgroundColorChange = onBackgroundColorChange,
+            textColorInt = textColorInt,
+            onTextColorChange = onTextColorChange,
+            onResetToConvxDefault = onResetToConvxDefault,
             onReset = onReset,
         )
     }
@@ -267,21 +325,20 @@ fun ThemeScreen(
 @Composable
 fun PortraitThemeLayout(
     darkMode: DarkMode,
-    onDarkModeChange: (DarkMode) -> Unit,
     pureBlack: Boolean,
-    onPureBlackChange: (Boolean) -> Unit,
+    onThemeModeSelect: (DarkMode, Boolean) -> Unit,
     selectedThemeColor: Color,
     onSelectedThemeColorChange: (Color) -> Unit,
+    backgroundColorInt: Int,
+    onBackgroundColorChange: (Int) -> Unit,
+    textColorInt: Int,
+    onTextColorChange: (Int) -> Unit,
+    onResetToConvxDefault: () -> Unit,
     onReset: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            // Was a hardcoded PaddingValues(0.dp) from the caller, so content
-            // started at y=0 under the opaque TopAppBar below — the phone
-            // mockup's top edge rendered hidden behind the bar. This is the
-            // same top-bar-aware inset every other settings screen already
-            // uses (see GlassEffectSettings.kt).
             .windowInsetsPadding(LocalPlayerAwareWindowInsets.current)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -305,16 +362,19 @@ fun PortraitThemeLayout(
 
         ThemeControls(
             darkMode = darkMode,
-            onDarkModeChange = onDarkModeChange,
             pureBlack = pureBlack,
-            onPureBlackChange = onPureBlackChange,
+            onThemeModeSelect = onThemeModeSelect,
+            backgroundColorInt = backgroundColorInt,
+            onBackgroundColorChange = onBackgroundColorChange,
+            textColorInt = textColorInt,
+            onTextColorChange = onTextColorChange,
+            onResetToConvxDefault = onResetToConvxDefault,
             onReset = onReset,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         HomeBackgroundControls()
-
 
         Spacer(modifier = Modifier.height(120.dp))
     }
@@ -323,17 +383,20 @@ fun PortraitThemeLayout(
 @Composable
 fun LandscapeThemeLayout(
     darkMode: DarkMode,
-    onDarkModeChange: (DarkMode) -> Unit,
     pureBlack: Boolean,
-    onPureBlackChange: (Boolean) -> Unit,
+    onThemeModeSelect: (DarkMode, Boolean) -> Unit,
     selectedThemeColor: Color,
     onSelectedThemeColorChange: (Color) -> Unit,
+    backgroundColorInt: Int,
+    onBackgroundColorChange: (Int) -> Unit,
+    textColorInt: Int,
+    onTextColorChange: (Int) -> Unit,
+    onResetToConvxDefault: () -> Unit,
     onReset: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxSize()
-            // Same top-bar-hidden-mockup fix as PortraitThemeLayout above.
             .windowInsetsPadding(LocalPlayerAwareWindowInsets.current)
     ) {
         Column(
@@ -367,16 +430,19 @@ fun LandscapeThemeLayout(
         ) {
             ThemeControls(
                 darkMode = darkMode,
-                onDarkModeChange = onDarkModeChange,
                 pureBlack = pureBlack,
-                onPureBlackChange = onPureBlackChange,
+                onThemeModeSelect = onThemeModeSelect,
+                backgroundColorInt = backgroundColorInt,
+                onBackgroundColorChange = onBackgroundColorChange,
+                textColorInt = textColorInt,
+                onTextColorChange = onTextColorChange,
+                onResetToConvxDefault = onResetToConvxDefault,
                 onReset = onReset,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             HomeBackgroundControls()
-
 
             Spacer(modifier = Modifier.height(80.dp))
         }
@@ -386,9 +452,13 @@ fun LandscapeThemeLayout(
 @Composable
 fun ThemeControls(
     darkMode: DarkMode,
-    onDarkModeChange: (DarkMode) -> Unit,
     pureBlack: Boolean,
-    onPureBlackChange: (Boolean) -> Unit,
+    onThemeModeSelect: (DarkMode, Boolean) -> Unit,
+    backgroundColorInt: Int,
+    onBackgroundColorChange: (Int) -> Unit,
+    textColorInt: Int,
+    onTextColorChange: (Int) -> Unit,
+    onResetToConvxDefault: () -> Unit,
     onReset: () -> Unit,
 ) {
     Card(
@@ -424,7 +494,7 @@ fun ThemeControls(
                         targetMode = DarkMode.AUTO,
                         targetPureBlack = pureBlack,
                         onClick = {
-                            onDarkModeChange(DarkMode.AUTO)
+                            onThemeModeSelect(DarkMode.AUTO, false)
                         },
                         showIcon = true
                     )
@@ -444,8 +514,7 @@ fun ThemeControls(
                         targetMode = DarkMode.OFF,
                         targetPureBlack = false,
                         onClick = {
-                            onDarkModeChange(DarkMode.OFF)
-                            onPureBlackChange(false)
+                            onThemeModeSelect(DarkMode.OFF, false)
                         },
                         showIcon = false
                     )
@@ -456,8 +525,7 @@ fun ThemeControls(
                         targetMode = DarkMode.ON,
                         targetPureBlack = false,
                         onClick = {
-                            onDarkModeChange(DarkMode.ON)
-                            onPureBlackChange(false)
+                            onThemeModeSelect(DarkMode.ON, false)
                         },
                         showIcon = false
                     )
@@ -468,15 +536,22 @@ fun ThemeControls(
                         targetMode = DarkMode.ON,
                         targetPureBlack = true,
                         onClick = {
-                            onDarkModeChange(DarkMode.ON)
-                            onPureBlackChange(true)
+                            onThemeModeSelect(DarkMode.ON, true)
                         },
                         showIcon = false
                     )
                 }
             }
 
-            AppBackgroundTextColorSection()
+            AppBackgroundTextColorSection(
+                darkMode = darkMode,
+                pureBlack = pureBlack,
+                backgroundColorInt = backgroundColorInt,
+                onBackgroundColorChange = onBackgroundColorChange,
+                textColorInt = textColorInt,
+                onTextColorChange = onTextColorChange,
+                onResetToConvxDefault = onResetToConvxDefault,
+            )
 
             TextButton(
                 onClick = onReset,
@@ -489,59 +564,189 @@ fun ThemeControls(
 }
 
 /**
- * App-wide background/text color, independent of Liquid Glass. Replaces the
- * old accent-color palette picker in this screen — the seed-color mechanism
- * it wrote to ([SelectedThemeColorKey]/[DynamicThemeKey]) is untouched and
- * still drives the app's Material color scheme, this just removes its picker
- * UI here in favor of direct background/text color control.
- *
- * Both preferences default to 0 ("unset"): every call site that reads them
- * (Home's plain background, the shared nav chrome's non-glass fallback)
- * falls back to its exact pre-existing hardcoded color, so a user who never
- * opens this section sees no visual change at all.
+ * App-wide background and text color controls.
+ * Automatically configured with Convx's signature aesthetic palettes when switching modes,
+ * while allowing full user customization and curated presets.
  */
 @Composable
-private fun AppBackgroundTextColorSection() {
-    val (backgroundColorInt, onBackgroundColorChange) = rememberPreference(AppBackgroundColorKey, defaultValue = 0)
-    val (textColorInt, onTextColorChange) = rememberPreference(AppTextColorKey, defaultValue = 0)
+private fun AppBackgroundTextColorSection(
+    darkMode: DarkMode,
+    pureBlack: Boolean,
+    backgroundColorInt: Int,
+    onBackgroundColorChange: (Int) -> Unit,
+    textColorInt: Int,
+    onTextColorChange: (Int) -> Unit,
+    onResetToConvxDefault: () -> Unit,
+) {
+    val convxPreset = when {
+        darkMode == DarkMode.OFF -> ConvxThemePresets.LightBackground to ConvxThemePresets.LightText
+        darkMode == DarkMode.ON && pureBlack -> ConvxThemePresets.PureBlackBackground to ConvxThemePresets.PureBlackText
+        darkMode == DarkMode.ON -> ConvxThemePresets.DarkBackground to ConvxThemePresets.DarkText
+        else -> MaterialTheme.colorScheme.surface to MaterialTheme.colorScheme.onSurface
+    }
 
-    // "Unset" swatch shown here matches what every consuming call site's own
-    // fallback actually resolves to (surfaceContainerHigh / onSurface), so
-    // the picker never shows a color that doesn't match reality.
-    val backgroundColor = if (backgroundColorInt == 0) MaterialTheme.colorScheme.surfaceContainerHigh else Color(backgroundColorInt)
-    val textColor = if (textColorInt == 0) MaterialTheme.colorScheme.onSurface else Color(textColorInt)
+    val backgroundColor = if (backgroundColorInt == 0) convxPreset.first else Color(backgroundColorInt)
+    val textColor = if (textColorInt == 0) convxPreset.second else Color(textColorInt)
+
+    val isCurrentConvxDefault = (backgroundColorInt == 0 || backgroundColorInt == convxPreset.first.toArgb()) &&
+            (textColorInt == 0 || textColorInt == convxPreset.second.toArgb())
 
     var showBackgroundPicker by remember { mutableStateOf(false) }
     var showTextPicker by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = stringResource(R.string.app_background_text_color),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = stringResource(R.string.app_background_text_color_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.app_background_text_color),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.app_background_text_color_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!isCurrentConvxDefault) {
+                FilledTonalButton(
+                    onClick = onResetToConvxDefault,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.refresh),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.convx_default),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            AppColorSwatchButton(
+            AppColorSwatchCard(
                 label = stringResource(R.string.background_color),
                 color = backgroundColor,
+                isCustom = backgroundColorInt != 0 && backgroundColorInt != convxPreset.first.toArgb(),
                 onClick = { showBackgroundPicker = true },
                 modifier = Modifier.weight(1f),
             )
-            AppColorSwatchButton(
+            AppColorSwatchCard(
                 label = stringResource(R.string.text_color),
                 color = textColor,
+                isCustom = textColorInt != 0 && textColorInt != convxPreset.second.toArgb(),
                 onClick = { showTextPicker = true },
                 modifier = Modifier.weight(1f),
             )
+        }
+
+        // Quick Presets Row
+        Text(
+            text = stringResource(R.string.presets),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SuggestionChip(
+                onClick = onResetToConvxDefault,
+                label = { Text(stringResource(R.string.convx_default)) },
+                icon = {
+                    if (isCurrentConvxDefault) {
+                        Icon(
+                            painter = painterResource(R.drawable.check),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            if (darkMode == DarkMode.OFF) {
+                ThemePresetChip(
+                    name = "Clean Frost",
+                    bg = Color(0xFFF6F7F9),
+                    text = Color(0xFF1C1C1E),
+                    currentBg = backgroundColor,
+                    currentText = textColor,
+                    onSelect = { bg, tx ->
+                        onBackgroundColorChange(bg.toArgb())
+                        onTextColorChange(tx.toArgb())
+                    }
+                )
+                ThemePresetChip(
+                    name = "Warm Ivory",
+                    bg = Color(0xFFFBF9F5),
+                    text = Color(0xFF2B2625),
+                    currentBg = backgroundColor,
+                    currentText = textColor,
+                    onSelect = { bg, tx ->
+                        onBackgroundColorChange(bg.toArgb())
+                        onTextColorChange(tx.toArgb())
+                    }
+                )
+                ThemePresetChip(
+                    name = "Pure White",
+                    bg = Color(0xFFFFFFFF),
+                    text = Color(0xFF111111),
+                    currentBg = backgroundColor,
+                    currentText = textColor,
+                    onSelect = { bg, tx ->
+                        onBackgroundColorChange(bg.toArgb())
+                        onTextColorChange(tx.toArgb())
+                    }
+                )
+            } else {
+                ThemePresetChip(
+                    name = "Midnight Slate",
+                    bg = Color(0xFF121214),
+                    text = Color(0xFFFFFFFF),
+                    currentBg = backgroundColor,
+                    currentText = textColor,
+                    onSelect = { bg, tx ->
+                        onBackgroundColorChange(bg.toArgb())
+                        onTextColorChange(tx.toArgb())
+                    }
+                )
+                ThemePresetChip(
+                    name = "OLED Pitch",
+                    bg = Color(0xFF000000),
+                    text = Color(0xFFFFFFFF),
+                    currentBg = backgroundColor,
+                    currentText = textColor,
+                    onSelect = { bg, tx ->
+                        onBackgroundColorChange(bg.toArgb())
+                        onTextColorChange(tx.toArgb())
+                    }
+                )
+                ThemePresetChip(
+                    name = "Deep Navy",
+                    bg = Color(0xFF0D1117),
+                    text = Color(0xFFE6EDF3),
+                    currentBg = backgroundColor,
+                    currentText = textColor,
+                    onSelect = { bg, tx ->
+                        onBackgroundColorChange(bg.toArgb())
+                        onTextColorChange(tx.toArgb())
+                    }
+                )
+            }
         }
     }
 
@@ -549,11 +754,16 @@ private fun AppBackgroundTextColorSection() {
         ColorPickerDialog(
             initialColor = backgroundColor,
             title = stringResource(R.string.background_color),
+            defaultColor = convxPreset.first,
             onDismiss = { showBackgroundPicker = false },
             onConfirm = {
                 onBackgroundColorChange(it.toArgb())
                 showBackgroundPicker = false
             },
+            onReset = {
+                onBackgroundColorChange(convxPreset.first.toArgb())
+                showBackgroundPicker = false
+            }
         )
     }
 
@@ -561,40 +771,90 @@ private fun AppBackgroundTextColorSection() {
         ColorPickerDialog(
             initialColor = textColor,
             title = stringResource(R.string.text_color),
+            defaultColor = convxPreset.second,
             onDismiss = { showTextPicker = false },
             onConfirm = {
                 onTextColorChange(it.toArgb())
                 showTextPicker = false
             },
+            onReset = {
+                onTextColorChange(convxPreset.second.toArgb())
+                showTextPicker = false
+            }
         )
     }
 }
 
 @Composable
-private fun AppColorSwatchButton(
+private fun AppColorSwatchCard(
     label: String,
     color: Color,
+    isCustom: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Card(
         modifier = modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(color)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(color)
+                    .border(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                Text(
+                    text = if (isCustom) "Custom" else "Convx Preset",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun ThemePresetChip(
+    name: String,
+    bg: Color,
+    text: Color,
+    currentBg: Color,
+    currentText: Color,
+    onSelect: (Color, Color) -> Unit,
+) {
+    val isSelected = currentBg == bg && currentText == text
+    FilterChip(
+        selected = isSelected,
+        onClick = { onSelect(bg, text) },
+        label = { Text(name) },
+        leadingIcon = {
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(bg)
+                    .border(1.dp, text.copy(alpha = 0.5f), CircleShape)
+            )
+        }
+    )
 }
 
 @Composable

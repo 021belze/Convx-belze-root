@@ -58,6 +58,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.convx.music.LocalPlayerAwareWindowInsets
 import com.convx.music.LocalPlayerConnection
+import com.convx.music.LocalTabView
 import com.convx.music.R
 import com.convx.music.constants.CONTENT_TYPE_HEADER
 import com.convx.music.constants.CONTENT_TYPE_SONG
@@ -112,7 +113,7 @@ fun LibrarySongsScreen(
 
     val (ytmSync) = rememberPreference(YtmSyncKey, true)
     val hideExplicit by rememberPreference(key = HideExplicitKey, defaultValue = false)
-    val (libraryIconsOnly) = rememberPreference(LibraryIconsOnlyKey, defaultValue = true)
+    val (libraryIconsOnly) = rememberPreference(LibraryIconsOnlyKey, defaultValue = false)
 
     val songs by viewModel.allSongs.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
@@ -174,6 +175,9 @@ fun LibrarySongsScreen(
     val filteredSongs = remember(songs, hideExplicit) {
         if (hideExplicit) songs.filter { !it.song.explicit } else songs
     }
+
+    val isTablet = LocalTabView.current
+    val songPairs = remember(filteredSongs) { filteredSongs.chunked(2) }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -387,55 +391,169 @@ fun LibrarySongsScreen(
                 }
             }
 
-            itemsIndexed(
-                items = filteredSongs,
-                key = { _, item -> item.song.id },
-                contentType = { _, _ -> CONTENT_TYPE_SONG },
-            ) { index, song ->
-                SongListItem(
-                    song = song,
-                    showInLibraryIcon = true,
-                    isActive = song.id == mediaMetadata?.id,
-                    isPlaying = isPlaying,
-                    showIconOnly = libraryIconsOnly,
-                    showLikedIcon = filter != SongFilter.LOCAL,
-                    showDownloadIcon = filter != SongFilter.DOWNLOADED && filter != SongFilter.LOCAL,
-                    shape = listItemShape(index, filteredSongs.size),
-                    trailingContent = {
-                        IconButton(
-                            onClick = {
-                                menuState.show {
-                                    SongMenu(
-                                        originalSong = song,
-                                        navController = navController,
-                                        onDismiss = menuState::dismiss,
-                                    )
-                                }
-                            },
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
+            if (isTablet) {
+                itemsIndexed(
+                    items = songPairs,
+                    key = { _, pair -> pair.first().song.id },
+                    contentType = { _, _ -> CONTENT_TYPE_SONG },
+                ) { rowIndex, pair ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = AppleTokens.Gutter),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val song1 = pair[0]
+                        val index1 = rowIndex * 2
+                        Box(Modifier.weight(1f)) {
+                            SongListItem(
+                                song = song1,
+                                showInLibraryIcon = true,
+                                isActive = song1.id == mediaMetadata?.id,
+                                isPlaying = isPlaying,
+                                showIconOnly = libraryIconsOnly,
+                                showLikedIcon = filter != SongFilter.LOCAL,
+                                showDownloadIcon = filter != SongFilter.DOWNLOADED && filter != SongFilter.LOCAL,
+                                shape = RoundedCornerShape(12.dp),
+                                trailingContent = {
+                                    IconButton(
+                                        onClick = {
+                                            menuState.show {
+                                                SongMenu(
+                                                    originalSong = song1,
+                                                    navController = navController,
+                                                    onDismiss = menuState::dismiss,
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.more_vert),
+                                            contentDescription = null,
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .bounceClick {
+                                        if (song1.id == mediaMetadata?.id) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            playerConnection.playQueue(
+                                                ListQueue(
+                                                    title = context.getString(R.string.queue_all_songs),
+                                                    items = filteredSongs.map { it.toMediaItem() },
+                                                    startIndex = index1,
+                                                ),
+                                            )
+                                        }
+                                    }
                             )
                         }
-                    },
-                    modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .bounceClick {
-                            if (song.id == mediaMetadata?.id) {
-                                playerConnection.togglePlayPause()
-                            } else {
-                                playerConnection.playQueue(
-                                    ListQueue(
-                                        title = context.getString(R.string.queue_all_songs),
-                                        items = filteredSongs.map { it.toMediaItem() },
-                                        startIndex = index,
-                                    ),
+                        if (pair.size > 1) {
+                            val song2 = pair[1]
+                            val index2 = rowIndex * 2 + 1
+                            Box(Modifier.weight(1f)) {
+                                SongListItem(
+                                    song = song2,
+                                    showInLibraryIcon = true,
+                                    isActive = song2.id == mediaMetadata?.id,
+                                    isPlaying = isPlaying,
+                                    showIconOnly = libraryIconsOnly,
+                                    showLikedIcon = filter != SongFilter.LOCAL,
+                                    showDownloadIcon = filter != SongFilter.DOWNLOADED && filter != SongFilter.LOCAL,
+                                    shape = RoundedCornerShape(12.dp),
+                                    trailingContent = {
+                                        IconButton(
+                                            onClick = {
+                                                menuState.show {
+                                                    SongMenu(
+                                                        originalSong = song2,
+                                                        navController = navController,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+                                            },
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.more_vert),
+                                                contentDescription = null,
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .bounceClick {
+                                            if (song2.id == mediaMetadata?.id) {
+                                                playerConnection.togglePlayPause()
+                                            } else {
+                                                playerConnection.playQueue(
+                                                    ListQueue(
+                                                        title = context.getString(R.string.queue_all_songs),
+                                                        items = filteredSongs.map { it.toMediaItem() },
+                                                        startIndex = index2,
+                                                    ),
+                                                )
+                                            }
+                                        }
                                 )
                             }
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
-                )
+                    }
+                }
+            } else {
+                itemsIndexed(
+                    items = filteredSongs,
+                    key = { _, item -> item.song.id },
+                    contentType = { _, _ -> CONTENT_TYPE_SONG },
+                ) { index, song ->
+                    SongListItem(
+                        song = song,
+                        showInLibraryIcon = true,
+                        isActive = song.id == mediaMetadata?.id,
+                        isPlaying = isPlaying,
+                        showIconOnly = libraryIconsOnly,
+                        showLikedIcon = filter != SongFilter.LOCAL,
+                        showDownloadIcon = filter != SongFilter.DOWNLOADED && filter != SongFilter.LOCAL,
+                        shape = listItemShape(index, filteredSongs.size),
+                        trailingContent = {
+                            IconButton(
+                                onClick = {
+                                    menuState.show {
+                                        SongMenu(
+                                            originalSong = song,
+                                            navController = navController,
+                                            onDismiss = menuState::dismiss,
+                                        )
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.more_vert),
+                                    contentDescription = null,
+                                )
+                            }
+                        },
+                        modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .bounceClick {
+                                if (song.id == mediaMetadata?.id) {
+                                    playerConnection.togglePlayPause()
+                                } else {
+                                    playerConnection.playQueue(
+                                        ListQueue(
+                                            title = context.getString(R.string.queue_all_songs),
+                                            items = filteredSongs.map { it.toMediaItem() },
+                                            startIndex = index,
+                                        ),
+                                    )
+                                }
+                            }
+                    )
+                }
             }
         }
 

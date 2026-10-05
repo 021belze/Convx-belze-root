@@ -148,7 +148,7 @@ fun LibraryMixScreen(
     val (sortDescending, onSortDescendingChange) = rememberPreference(MixSortDescendingKey, true)
     val gridItemSize by rememberEnumPreference(GridItemsSizeKey, GridItemSize.BIG)
     
-    val (libraryIconsOnly) = rememberPreference(LibraryIconsOnlyKey, defaultValue = true)
+    val (libraryIconsOnly) = rememberPreference(LibraryIconsOnlyKey, defaultValue = false)
 
     val topSize by viewModel.topValue.collectAsState(initial = 50)
     
@@ -248,10 +248,21 @@ fun LibraryMixScreen(
     val showCached = showCachedPref && !localOnly
     val showUploaded = showUploadedPref && !localOnly
 
+    val autoPlaylistIds = remember {
+        setOf(
+            PlaylistEntity.LIKED_PLAYLIST_ID,
+            PlaylistEntity.DOWNLOADED_PLAYLIST_ID,
+            PlaylistEntity.TOP_PLAYLIST_ID,
+            PlaylistEntity.CACHED_PLAYLIST_ID,
+            PlaylistEntity.UPLOADED_PLAYLIST_ID,
+            PlaylistEntity.LOCAL_PLAYLIST_ID,
+        )
+    }
     val platformLocale = LocalLocale.current.platformLocale
     val allItems =
-        remember(albums, playlists, sortType, sortDescending, platformLocale) {
-            var items = albums + playlists
+        remember(albums, artists, playlists, sortType, sortDescending, platformLocale) {
+            val nonAutoPlaylists = playlists.filter { it.id !in autoPlaylistIds }
+            var items = albums + nonAutoPlaylists + artists
             val collator = Collator.getInstance(platformLocale)
             collator.strength = Collator.PRIMARY
             items =
@@ -288,7 +299,14 @@ fun LibraryMixScreen(
                             }
                         }
                 }.reversed(sortDescending)
-            items.distinctBy { it.id }
+            items.distinctBy { item ->
+                when (item) {
+                    is Album -> "album_${item.id}"
+                    is Artist -> "artist_${item.id}"
+                    is Playlist -> "playlist_${item.id}"
+                    else -> item.id
+                }
+            }
         }
 
     val coroutineScope = rememberCoroutineScope()
@@ -645,7 +663,14 @@ fun LibraryMixScreen(
 
                     items(
                         items = allItems,
-                        key = { it.id },
+                        key = { item ->
+                            when (item) {
+                                is Album -> "album_${item.id}"
+                                is Artist -> "artist_${item.id}"
+                                is Playlist -> "playlist_${item.id}"
+                                else -> item.id
+                            }
+                        },
                         contentType = { CONTENT_TYPE_PLAYLIST },
                     ) { item ->
                         when (item) {
@@ -1022,7 +1047,14 @@ fun LibraryMixScreen(
 
                     items(
                         items = allItems,
-                        key = { it.id },
+                        key = { item ->
+                            when (item) {
+                                is Album -> "album_${item.id}"
+                                is Artist -> "artist_${item.id}"
+                                is Playlist -> "playlist_${item.id}"
+                                else -> item.id
+                            }
+                        },
                         contentType = { CONTENT_TYPE_PLAYLIST },
                     ) { item ->
                         when (item) {

@@ -101,9 +101,9 @@ import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.viewmodels.CsvImportState
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import kotlinx.coroutines.Dispatchers
-import com.convx.music.ui.utils.appTopBarWindowInsets
+import kotlinx.coroutines.withContext
+import android.widget.Toast
 import kotlinx.coroutines.delay
-import com.convx.music.ui.utils.appTopBarWindowInsets
 import kotlinx.coroutines.launch
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import java.time.LocalDateTime
@@ -212,7 +212,7 @@ fun BackupAndRestore(
                     title = { Text(stringResource(R.string.import_online)) },
                     icon = painterResource(R.drawable.playlist_add),
                     onClick = {
-                        importM3uLauncherOnline.launch(arrayOf("audio/*"))
+                        importM3uLauncherOnline.launch(arrayOf("*/*"))
                     }
                 ),
                 Material3SettingsItem(
@@ -309,6 +309,13 @@ fun BackupAndRestore(
                             csvImportProgress = 0
                             csvRecentLogs.clear()
                             showChoosePlaylistDialogOnline = true
+                        } else {
+                            showCsvImportProgress = false
+                            csvImportProgress = 0
+                            csvRecentLogs.clear()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, context.getString(R.string.playlist_not_found), Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }

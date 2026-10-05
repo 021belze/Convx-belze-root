@@ -93,6 +93,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -106,8 +107,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.convx.music.constants.AiProviderKey
+import com.convx.music.constants.DeeplApiKey
+import com.convx.music.constants.OpenRouterApiKey
+import com.convx.music.lyrics.LyricsTranslationHelper
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -250,6 +256,7 @@ import com.convx.music.ui.component.rememberHeroTint
 import com.convx.music.ui.theme.AppleTokens
 import com.convx.music.ui.menu.OldPlayerMenu
 import com.convx.music.ui.menu.PlayerMenu
+import com.convx.music.ui.component.SleepTimerDialog
 import com.convx.music.ui.component.VolumeSlider
 import com.convx.music.ui.screens.settings.DarkMode
 import com.convx.music.ui.theme.PlayerColorExtractor
@@ -384,14 +391,29 @@ fun BottomSheetPlayer(
         if (darkTheme == DarkMode.AUTO) isSystemInDarkTheme else darkTheme == DarkMode.ON
     }
 
+    val staticColor by rememberPreference(PlayerStaticColorKey, defaultValue = 0xFF1A1A1A.toInt())
+    val staticColorLuminance = remember(staticColor) {
+        val c = android.graphics.Color.valueOf(staticColor)
+        0.2126f * c.red() + 0.7152f * c.green() + 0.0722f * c.blue()
+    }
+
     val dataSaverEnabled by rememberPreference(DataSaverEnabledKey, false)
     val enableCanvasPref by rememberPreference(CanvasThumbnailAnimationKey, true)
     val enableCanvas = if (dataSaverEnabled) false else enableCanvasPref
     val (canvasSource) = rememberEnumPreference(CanvasSourceKey, defaultValue = CanvasSource.AUTO)
 
-    val shouldUseDarkButtonColors = remember(playerBackground, useDarkTheme) {
+    val shouldUseDarkButtonColors = remember(playerBackground, useDarkTheme, staticColorLuminance) {
         when (playerBackground) {
-            PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT, PlayerBackgroundStyle.GLOW_ANIMATED, PlayerBackgroundStyle.APPLE_MUSIC, PlayerBackgroundStyle.LIVE_MESH, PlayerBackgroundStyle.STATIC, PlayerBackgroundStyle.CUSTOM_GRADIENT -> true
+            // Artwork-based styles always have a dark backdrop behind them (blurred art or gradient
+            // fading to black) — controls must be white/light regardless of system theme.
+            PlayerBackgroundStyle.BLUR,
+            PlayerBackgroundStyle.GRADIENT,
+            PlayerBackgroundStyle.GLOW_ANIMATED,
+            PlayerBackgroundStyle.APPLE_MUSIC,
+            PlayerBackgroundStyle.LIVE_MESH -> true
+            // STATIC and CUSTOM_GRADIENT can be any brightness — decide by luminance.
+            PlayerBackgroundStyle.STATIC -> staticColorLuminance < 0.4f
+            PlayerBackgroundStyle.CUSTOM_GRADIENT -> true // gradients are typically dark
             PlayerBackgroundStyle.DEFAULT -> useDarkTheme
         }
     }
@@ -412,7 +434,19 @@ fun BottomSheetPlayer(
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
             
             when (playerBackground) {
-                PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT, PlayerBackgroundStyle.GLOW_ANIMATED, PlayerBackgroundStyle.APPLE_MUSIC, PlayerBackgroundStyle.LIVE_MESH, PlayerBackgroundStyle.STATIC, PlayerBackgroundStyle.CUSTOM_GRADIENT -> {
+                // Artwork/gradient backgrounds are always dark — force light (white) icons.
+                PlayerBackgroundStyle.BLUR,
+                PlayerBackgroundStyle.GRADIENT,
+                PlayerBackgroundStyle.GLOW_ANIMATED,
+                PlayerBackgroundStyle.APPLE_MUSIC,
+                PlayerBackgroundStyle.LIVE_MESH -> {
+                    insetsController.isAppearanceLightStatusBars = false
+                }
+                // STATIC color could be light or dark — infer from luminance.
+                PlayerBackgroundStyle.STATIC -> {
+                    insetsController.isAppearanceLightStatusBars = staticColorLuminance > 0.4f
+                }
+                PlayerBackgroundStyle.CUSTOM_GRADIENT -> {
                     insetsController.isAppearanceLightStatusBars = false
                 }
                 PlayerBackgroundStyle.DEFAULT -> {
@@ -434,7 +468,16 @@ fun BottomSheetPlayer(
             }
         }
     }
-    val staticColor by rememberPreference(PlayerStaticColorKey, defaultValue = 0xFF1A1A1A.toInt())
+
+    // Epik B: Back from expanded player collapses to mini player (Apple Music behavior).
+    // Without this, the system's default back handler pops the nav stack or exits the
+    // app even when the player is covering the full screen.
+    // isPreviewOnly guard: the DIY editor mounts a second instance — don't intercept
+    // back there, it belongs to the editor's own navigation.
+    BackHandler(enabled = state.isExpanded && !isPreviewOnly) {
+        state.collapseSoft()
+    }
+
     val gradientStopsRaw by rememberPreference(PlayerGradientStopsKey, defaultValue = "")
     val gradientStops = remember(gradientStopsRaw) { decodeGradientStops(gradientStopsRaw) }
     val gradientAngle by rememberPreference(PlayerGradientAngleKey, defaultValue = 90f)
@@ -713,15 +756,24 @@ fun BottomSheetPlayer(
     // global color directly, for every style, whenever the user has set one.
     val (appTextColorInt) = rememberPreference(AppTextColorKey, defaultValue = 0)
     val (showUpNext) = rememberPreference(ShowUpNextKey, defaultValue = false)
+    // Adaptive text color: artwork-based styles (BLUR/GRADIENT/APPLE_MUSIC/LIVE_MESH) always
+    // render a dark backdrop, so white text is correct regardless of system theme. STATIC
+    // resolves by its own stored color's luminance. DEFAULT follows the active theme.
     val TextBackgroundColor by animateColorAsState(
-        targetValue = if (appTextColorInt != 0) Color(appTextColorInt) else when (playerBackground) {
-            PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.onBackground
-            PlayerBackgroundStyle.BLUR -> Color.White
-            PlayerBackgroundStyle.GRADIENT -> Color.White
-            PlayerBackgroundStyle.GLOW_ANIMATED -> Color.White
-            PlayerBackgroundStyle.APPLE_MUSIC -> Color.White
+        targetValue = when (playerBackground) {
+            PlayerBackgroundStyle.DEFAULT ->
+                if (appTextColorInt != 0) Color(appTextColorInt) else MaterialTheme.colorScheme.onBackground
+            // Artwork-based backgrounds are inherently dark — white text always readable.
+            PlayerBackgroundStyle.BLUR,
+            PlayerBackgroundStyle.GRADIENT,
+            PlayerBackgroundStyle.GLOW_ANIMATED,
+            PlayerBackgroundStyle.APPLE_MUSIC,
             PlayerBackgroundStyle.LIVE_MESH -> Color.White
-            PlayerBackgroundStyle.STATIC, PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.White
+            // CUSTOM_GRADIENT fades to black — white text is safe.
+            PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.White
+            // STATIC: light background → dark text, dark background → white text.
+            PlayerBackgroundStyle.STATIC ->
+                if (staticColorLuminance > 0.4f) Color(0xFF1C1C1E) else Color.White
         },
         label = "TextBackgroundColor"
     )
@@ -729,12 +781,15 @@ fun BottomSheetPlayer(
     val icBackgroundColor by animateColorAsState(
         targetValue = when (playerBackground) {
             PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.surface
-            PlayerBackgroundStyle.BLUR -> Color.Black
-            PlayerBackgroundStyle.GRADIENT -> Color.Black
-            PlayerBackgroundStyle.GLOW_ANIMATED -> Color.Black
-            PlayerBackgroundStyle.APPLE_MUSIC -> Color.Black
+            PlayerBackgroundStyle.BLUR,
+            PlayerBackgroundStyle.GRADIENT,
+            PlayerBackgroundStyle.GLOW_ANIMATED,
+            PlayerBackgroundStyle.APPLE_MUSIC,
             PlayerBackgroundStyle.LIVE_MESH -> Color.Black
-            PlayerBackgroundStyle.STATIC, PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.Black
+            PlayerBackgroundStyle.CUSTOM_GRADIENT -> Color.Black
+            // STATIC: invert text color for icon fill.
+            PlayerBackgroundStyle.STATIC ->
+                if (staticColorLuminance > 0.4f) Color.White else Color.Black
         },
         label = "icBackgroundColor"
     )
@@ -867,7 +922,10 @@ fun BottomSheetPlayer(
     // else the same textButtonColor every other player control already uses. Every
     // slider style's inactive track is a faded version of this same color (see
     // PlayerSliderColors), so both halves of the seek bar read as one color, not two.
-    val seekBarActiveColor = if (appTextColorInt != 0) Color(appTextColorInt) else textButtonColor
+    val seekBarActiveColor = when (playerBackground) {
+        PlayerBackgroundStyle.DEFAULT -> if (appTextColorInt != 0) Color(appTextColorInt) else textButtonColor
+        else -> textButtonColor
+    }
 
     // Separate colors for Previous/Next buttons in PRIMARY/TERTIARY modes
     val (sideButtonContainerColor, sideButtonContentColor) = when {
@@ -955,65 +1013,9 @@ fun BottomSheetPlayer(
         mutableStateOf(false)
     }
 
-    var sleepTimerValue by remember {
-        mutableFloatStateOf(30f)
-    }
     if (showSleepTimerDialog) {
-        AlertDialog(
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-            onDismissRequest = { showSleepTimerDialog = false },
-            icon = {
-                Icon(
-                    painter = painterResource(R.drawable.bedtime),
-                    contentDescription = null
-                )
-            },
-            title = { Text(stringResource(R.string.sleep_timer)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showSleepTimerDialog = false
-                        playerConnection.service.sleepTimer.start(sleepTimerValue.roundToInt())
-                    },
-                ) {
-                    Text(stringResource(android.R.string.ok))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showSleepTimerDialog = false },
-                ) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = pluralStringResource(
-                            R.plurals.minute,
-                            sleepTimerValue.roundToInt(),
-                            sleepTimerValue.roundToInt()
-                        ),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-
-                    Slider(
-                        value = sleepTimerValue,
-                        onValueChange = { sleepTimerValue = it },
-                        valueRange = 5f..120f,
-                        steps = (120 - 5) / 5 - 1,
-                    )
-
-                    OutlinedIconButton(
-                        onClick = {
-                            showSleepTimerDialog = false
-                            playerConnection.service.sleepTimer.start(-1)
-                        },
-                    ) {
-                        Text(stringResource(R.string.end_of_song))
-                    }
-                }
-            },
+        SleepTimerDialog(
+            onDismiss = { showSleepTimerDialog = false }
         )
     }
 
@@ -1031,6 +1033,14 @@ fun BottomSheetPlayer(
     val (oneTapFullscreenLyrics) = rememberPreference(OneTapFullscreenLyricsKey, defaultValue = false)
     val (fullscreenLyricsCollapseTop) = rememberPreference(FullscreenLyricsCollapseTopKey, defaultValue = true)
     val (hideVolumeBar) = rememberPreference(HideVolumeBarKey, defaultValue = false)
+
+    val (openRouterApiKey) = rememberPreference(OpenRouterApiKey, "")
+    val (deeplApiKey) = rememberPreference(DeeplApiKey, "")
+    val (aiProvider) = rememberPreference(AiProviderKey, "OpenRouter")
+    val hasAiApiKey = if (aiProvider == "DeepL") deeplApiKey.isNotBlank() else openRouterApiKey.isNotBlank()
+    val hasActiveTranslations by LyricsTranslationHelper.hasActiveTranslations.collectAsState()
+    val translationStatus by LyricsTranslationHelper.status.collectAsState()
+    val currentLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue = null)
     // Position update - only for local playback when player is visible
     // When casting, we use castPosition directly to avoid sync issues
     // Pauses polling when the full sheet is collapsed to prevent background recompositions
@@ -1118,13 +1128,25 @@ fun BottomSheetPlayer(
     }
 
     val bottomSheetBackgroundColor = when (playerBackground) {
-        PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT, PlayerBackgroundStyle.GLOW_ANIMATED, PlayerBackgroundStyle.APPLE_MUSIC ->
-            MaterialTheme.colorScheme.surfaceContainer
-        PlayerBackgroundStyle.LIVE_MESH ->
-            Color.Black
-        else ->
+        // Artwork-based styles: the background content (blurred art, gradient, canvas) covers
+        // the sheet entirely. Use a dark base color so the sheet edge/scaffold renders
+        // correctly; in light mode use a very dark surface so the art composites cleanly.
+        PlayerBackgroundStyle.BLUR,
+        PlayerBackgroundStyle.GRADIENT,
+        PlayerBackgroundStyle.GLOW_ANIMATED,
+        PlayerBackgroundStyle.APPLE_MUSIC ->
+            if (useDarkTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF101010)
+        PlayerBackgroundStyle.LIVE_MESH -> Color.Black
+        // STATIC: use the stored color directly as the sheet background.
+        PlayerBackgroundStyle.STATIC -> Color(staticColor)
+        // CUSTOM_GRADIENT: opaque dark base for gradient to paint over.
+        PlayerBackgroundStyle.CUSTOM_GRADIENT ->
+            if (useDarkTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF0D0D0D)
+        // DEFAULT: respect pure-black pref in dark mode; use proper surface in light mode.
+        PlayerBackgroundStyle.DEFAULT ->
             if (useBlackBackground) Color.Black
-            else MaterialTheme.colorScheme.surfaceContainer
+            else if (useDarkTheme) MaterialTheme.colorScheme.surfaceContainer
+            else MaterialTheme.colorScheme.surface
     }
 
     // state.progress changes on every frame of a sheet drag or expand/collapse
@@ -1262,10 +1284,20 @@ fun BottomSheetPlayer(
                                     } else {
                                         Box(modifier = Modifier.fillMaxSize().background(Color.Black))
                                     }
+                                    // Dark overlay to ensure text legibility over bright artwork.
+                                    // Vertical gradient ramps up toward the bottom so controls and text
+                                    // always pop with high contrast, even when the album art is pure white.
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(
+                                                        Color.Black.copy(alpha = if (useDarkTheme) 0.35f else 0.20f),
+                                                        Color.Black.copy(alpha = if (useDarkTheme) 0.65f else 0.55f)
+                                                    )
+                                                )
+                                            )
                                     )
                                 }
                             }
@@ -1774,6 +1806,9 @@ fun BottomSheetPlayer(
                 // Status-bar scrim: black tint ramping from 0 at its own bottom edge
                 // up to fully dark at the top, so the status bar icons stay legible
                 // over bright artwork — same treatment as the app's own top bar.
+                // Status-bar scrim: keeps icons legible over artwork. In light mode the
+                // underlying artwork is already darkened by the BLUR overlay reduction above,
+                // so a lighter scrim suffices and avoids an overly heavy top strip.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1782,7 +1817,7 @@ fun BottomSheetPlayer(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.45f),
+                                    Color.Black.copy(alpha = if (useDarkTheme) 0.45f else 0.25f),
                                     Color.Transparent,
                                 ),
                             )
@@ -2177,6 +2212,46 @@ fun BottomSheetPlayer(
                             }
                         }
 
+                        if (showInlineLyrics) {
+                            FilledIconButton(
+                                onClick = {
+                                    if (!hasAiApiKey) {
+                                        navController.navigate("settings/ai")
+                                        Toast.makeText(context, context.getString(R.string.ai_api_key_required), Toast.LENGTH_SHORT).show()
+                                    } else if (hasActiveTranslations) {
+                                        currentLyrics?.let { lyrics ->
+                                            val cleared = LyricsTranslationHelper.clearTranslations(lyrics)
+                                            database.query { upsert(cleared) }
+                                        }
+                                        LyricsTranslationHelper.triggerClearTranslations()
+                                    } else {
+                                        LyricsTranslationHelper.triggerManualTranslation()
+                                    }
+                                },
+                                shape = middleShape,
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = textButtonColor,
+                                    contentColor = if (hasActiveTranslations) MaterialTheme.colorScheme.primary else iconButtonColor,
+                                ),
+                                modifier = Modifier.size(42.dp),
+                            ) {
+                                if (translationStatus is LyricsTranslationHelper.TranslationStatus.Translating) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        painter = painterResource(R.drawable.translate),
+                                        contentDescription = stringResource(R.string.ai_lyrics_translation),
+                                        tint = if (hasActiveTranslations) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         AnimatedContent(targetState = showInlineLyrics, label = "LikeButton") { showLyrics ->
                             if (showLyrics) {
                                 val currentLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue =null)
@@ -2288,6 +2363,41 @@ fun BottomSheetPlayer(
                                     fallback = R.drawable.more_vert,
                                     tint = LocalContentColor.current,
                                     modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (showInlineLyrics) {
+                        Spacer(modifier = Modifier.size(12.dp))
+                        GlassCircleButton(
+                            onClick = {
+                                if (!hasAiApiKey) {
+                                    navController.navigate("settings/ai")
+                                    Toast.makeText(context, context.getString(R.string.ai_api_key_required), Toast.LENGTH_SHORT).show()
+                                } else if (hasActiveTranslations) {
+                                    currentLyrics?.let { lyrics ->
+                                        val cleared = LyricsTranslationHelper.clearTranslations(lyrics)
+                                        database.query { upsert(cleared) }
+                                    }
+                                    LyricsTranslationHelper.triggerClearTranslations()
+                                } else {
+                                    LyricsTranslationHelper.triggerManualTranslation()
+                                }
+                            },
+                        ) {
+                            if (translationStatus is LyricsTranslationHelper.TranslationStatus.Translating) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(R.drawable.translate),
+                                    contentDescription = stringResource(R.string.ai_lyrics_translation),
+                                    tint = if (hasActiveTranslations) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
@@ -3033,12 +3143,18 @@ fun BottomSheetPlayer(
 
                             // Internal state to track drag value and avoid system feedback lag
                             var dragVolume by remember { mutableFloatStateOf(systemVolume) }
+                            var lastDispatchedStep by remember {
+                                mutableIntStateOf((systemVolume * maxSystemVolume).roundToInt())
+                            }
                             
                             // Use a coroutine to update system volume to avoid UI blocking on fast swipes
                             val scope = rememberCoroutineScope()
                             
                             LaunchedEffect(systemVolume) {
-                                if (!isVolumeActive) dragVolume = systemVolume
+                                if (!isVolumeActive) {
+                                    dragVolume = systemVolume
+                                    lastDispatchedStep = (systemVolume * maxSystemVolume).roundToInt()
+                                }
                             }
 
                             // Smoothly animate the volume position when changed via buttons
@@ -3088,11 +3204,29 @@ fun BottomSheetPlayer(
                                     if (isCasting) {
                                         castHandler?.setVolume(newVolume)
                                     } else {
-                                        // Non-blocking update to prevent "fast swipe" lag
-                                        scope.launch(Dispatchers.Default) {
-                                            val newStep = (newVolume * maxSystemVolume).roundToInt()
-                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
+                                        val newStep = (newVolume * maxSystemVolume).roundToInt().coerceIn(0, maxSystemVolume.toInt())
+                                        if (newStep != lastDispatchedStep) {
+                                            lastDispatchedStep = newStep
+                                            scope.launch(Dispatchers.Default) {
+                                                try {
+                                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
+                                                } catch (_: Exception) {}
+                                            }
                                         }
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    if (!isCasting) {
+                                        val newStep = (dragVolume * maxSystemVolume).roundToInt().coerceIn(0, maxSystemVolume.toInt())
+                                        if (newStep != lastDispatchedStep) {
+                                            lastDispatchedStep = newStep
+                                            scope.launch(Dispatchers.Default) {
+                                                try {
+                                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
+                                                } catch (_: Exception) {}
+                                            }
+                                        }
+                                        systemVolume = dragVolume
                                     }
                                 },
                                 modifier = Modifier.weight(1f),

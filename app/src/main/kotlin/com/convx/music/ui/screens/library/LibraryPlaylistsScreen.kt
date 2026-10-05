@@ -75,6 +75,7 @@ import com.convx.music.LocalPlayerAwareWindowInsets
 import com.convx.music.R
 import com.convx.music.constants.CONTENT_TYPE_HEADER
 import com.convx.music.constants.CONTENT_TYPE_PLAYLIST
+import com.convx.music.ui.component.NavigationTitle
 import com.convx.music.constants.GridItemSize
 import com.convx.music.constants.GridItemsSizeKey
 import com.convx.music.constants.GridThumbnailHeight
@@ -143,7 +144,7 @@ fun LibraryPlaylistsScreen(
     )
     val gridItemSize by rememberEnumPreference(GridItemsSizeKey, GridItemSize.BIG)
     
-    val (libraryIconsOnly) = rememberPreference(LibraryIconsOnlyKey, defaultValue = true)
+    val (libraryIconsOnly) = rememberPreference(LibraryIconsOnlyKey, defaultValue = false)
 
     val playlists by viewModel.allPlaylists.collectAsState()
 
@@ -303,9 +304,20 @@ fun LibraryPlaylistsScreen(
         }
     }
 
-    // Hoisted: both view types de-duped the same list separately, and the scroll rail
-    // needs the resulting count too.
-    val visiblePlaylists = remember(playlists) { playlists.distinctBy { it.id } }
+    val autoPlaylistIds = remember {
+        setOf(
+            PlaylistEntity.LIKED_PLAYLIST_ID,
+            PlaylistEntity.DOWNLOADED_PLAYLIST_ID,
+            PlaylistEntity.TOP_PLAYLIST_ID,
+            PlaylistEntity.CACHED_PLAYLIST_ID,
+            PlaylistEntity.UPLOADED_PLAYLIST_ID,
+            PlaylistEntity.LOCAL_PLAYLIST_ID,
+        )
+    }
+    // Filter out auto-playlist IDs so they don't duplicate under visiblePlaylists
+    val visiblePlaylists = remember(playlists) {
+        playlists.filter { it.id !in autoPlaylistIds }.distinctBy { it.id }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -419,24 +431,35 @@ fun LibraryPlaylistsScreen(
                         }
                     }
 
-                    playlists.let { playlists ->
-                        if (playlists.isEmpty()) {
-                            item(key = "empty_placeholder") {
-                            }
-                        }
-
-                        items(
-                            items = visiblePlaylists,
-                            key = { it.id },
-                            contentType = { CONTENT_TYPE_PLAYLIST },
-                        ) { playlist ->
-                            LibraryPlaylistListItem(
-                                navController = navController,
-                                menuState = menuState,
-                                coroutineScope = coroutineScope,
-                                playlist = playlist,
+                    val anyAutoPlaylistShown = showLiked || showDownloaded || showTop || showCached || showUploaded
+                    if (anyAutoPlaylistShown && visiblePlaylists.isNotEmpty()) {
+                        item(
+                            key = "user_playlists_header",
+                            contentType = CONTENT_TYPE_HEADER,
+                        ) {
+                            NavigationTitle(
+                                title = stringResource(R.string.playlists),
                             )
                         }
+                    }
+
+                    if (visiblePlaylists.isEmpty() && !anyAutoPlaylistShown) {
+                        item(key = "empty_placeholder") {
+                        }
+                    }
+
+                    items(
+                        items = visiblePlaylists,
+                        key = { it.id },
+                        contentType = { CONTENT_TYPE_PLAYLIST },
+                    ) { playlist ->
+                        LibraryPlaylistListItem(
+                            navController = navController,
+                            menuState = menuState,
+                            coroutineScope = coroutineScope,
+                            playlist = playlist,
+                            showIconOnly = libraryIconsOnly,
+                        )
                     }
                 }
 
@@ -561,24 +584,36 @@ fun LibraryPlaylistsScreen(
                         }
                     }
 
-                    playlists.let { playlists ->
-                        if (playlists.isEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                            }
-                        }
-
-                        items(
-                            items = visiblePlaylists,
-                            key = { it.id },
-                            contentType = { CONTENT_TYPE_PLAYLIST },
-                        ) { playlist ->
-                            LibraryPlaylistGridItem(
-                                navController = navController,
-                                menuState = menuState,
-                                coroutineScope = coroutineScope,
-                                playlist = playlist,
+                    val anyAutoPlaylistShown = showLiked || showDownloaded || showTop || showCached || showUploaded
+                    if (anyAutoPlaylistShown && visiblePlaylists.isNotEmpty()) {
+                        item(
+                            key = "user_playlists_header",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = CONTENT_TYPE_HEADER,
+                        ) {
+                            NavigationTitle(
+                                title = stringResource(R.string.playlists),
                             )
                         }
+                    }
+
+                    if (visiblePlaylists.isEmpty() && !anyAutoPlaylistShown) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        }
+                    }
+
+                    items(
+                        items = visiblePlaylists,
+                        key = { it.id },
+                        contentType = { CONTENT_TYPE_PLAYLIST },
+                    ) { playlist ->
+                        LibraryPlaylistGridItem(
+                            navController = navController,
+                            menuState = menuState,
+                            coroutineScope = coroutineScope,
+                            playlist = playlist,
+                            showIconOnly = libraryIconsOnly,
+                        )
                     }
                 }
 

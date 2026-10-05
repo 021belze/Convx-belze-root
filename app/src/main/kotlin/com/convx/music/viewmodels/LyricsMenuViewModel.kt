@@ -104,4 +104,40 @@ constructor(
             upsert(LyricsEntity(mediaMetadata.id, lyricsWithProvider.lyrics, lyricsWithProvider.provider))
         }
     }
+
+    fun refetchWithLrcLibPriority(
+        mediaMetadata: MediaMetadata,
+        lyricsEntity: LyricsEntity?,
+    ) {
+        val artistsString = mediaMetadata.artists.joinToString { it.name }
+        val artistTitleKey = "$artistsString ${mediaMetadata.title}".lowercase().replace(Regex("[^a-z0-9]"), "")
+        lyricsHelper.evictCache(mediaMetadata.id, artistTitleKey)
+        viewModelScope.launch(Dispatchers.IO) {
+            // Explicitly try LrcLib first for karaoke priority
+            val lrcLibResult = try {
+                com.convx.music.lyrics.LrcLibLyricsProvider.getLyrics(
+                    id = mediaMetadata.id,
+                    title = mediaMetadata.title,
+                    artist = artistsString,
+                    duration = mediaMetadata.duration,
+                    album = mediaMetadata.album?.title
+                ).getOrNull()
+            } catch (e: Exception) {
+                null
+            }
+
+            val (finalLyrics, finalProvider) = if (!lrcLibResult.isNullOrBlank() && lrcLibResult != LyricsEntity.LYRICS_NOT_FOUND) {
+                lrcLibResult to "LrcLib"
+            } else {
+                val fallback = lyricsHelper.getLyrics(mediaMetadata)
+                fallback.lyrics to fallback.provider
+            }
+
+            if (finalLyrics.isNotBlank() && finalLyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+                database.query {
+                    upsert(LyricsEntity(mediaMetadata.id, finalLyrics, finalProvider))
+                }
+            }
+        }
+    }
 }

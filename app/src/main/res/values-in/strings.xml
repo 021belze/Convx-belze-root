@@ -130,6 +130,14 @@
     <string name="lyrics_not_found">Lirik tidak ditemukan</string>
     <string name="sleep_timer">Pengatur waktu tidur</string>
     <string name="end_of_song">Akhir lagu</string>
+    <string name="sleep_timer_off">Nonaktif</string>
+    <string name="sleep_timer_active">Aktif</string>
+    <string name="sleep_timer_cancel">Matikan timer</string>
+    <string name="sleep_timer_stop_in">Berhenti dalam %s</string>
+    <string name="sleep_timer_end_of_track">Berhenti setelah lagu ini selesai</string>
+    <string name="sleep_timer_select_duration">Pilih durasi atau hingga akhir lagu</string>
+    <string name="sleep_timer_start">Mulai timer</string>
+    <string name="sleep_timer_extend">+%d mnt</string>
     <plurals name="minute">
         <item quantity="other">%d menit</item>
     </plurals>
@@ -270,4 +278,296 @@
     <string name="use_login_for_browse">Masuk untuk menjelajahi konten</string>
     <string name="use_login_for_browse_desc">Hal ini dapat memengaruhi konten yang Anda lihat dan misalnya menampilkan album khusus premium jika Anda masuk dengan akun Premium</string>
     <string name="action_login">Masuk</string>
+
+    <!-- Tambahan terjemahan yang belum ada -->
+    <string name="music">Musik</string>
+    <string name="recently_played">Baru Dimainkan</string>
+    <string name="recently_added">Baru Ditambahkan</string>
+    <string name="home_section_hero">Kartu unggulan</string>
+    <string name="home_section_community">Dari komunitas</string>
+    <string name="home_section_daily_discover">Temuan harian</string>
+    <string name="home_section_account_playlists">Daftar putar Anda</string>
+    <string name="home_section_forgotten_favorites">Favorit yang terlupakan</string>
+    <string name="show_mood_filters">Filter suasana hati</string>
+    <string name="show_mood_filters_desc">Tampilkan filter Energize, Relax, dan lainnya di bagian atas Beranda</string>
+    <string name="home_feed_order">Atur urutan beranda (Beta)</string>
+    <string name="home_feed_order_desc">Seret untuk memilih urutan tampilan bagian. Bagian yang muncul dan menghilang mengikuti rekomendasi Anda akan selalu mengikuti yang Anda atur di sini.</string>
+    <string name="home_feed_order_reset">Atur ulang ke urutan bawaan</string>
+    <string name="listen_now">Dengarkan Sekarang</string>
+    <string name="album_description_placeholder">Ini adalah deskripsi placeholder untuk album. Nikmati mendengarkan lagu-lagu di bawah ini!</string>
+    <string name="you_might_also_like">Daftar Putar Terkait</string>
+    <string name="shuffle_content_desc">Acak</string>
+    <string name="shuffle_label">Acak</string>
+    <string name="pause">Jeda</string>
+    <string name="saving">Menyimpan</string>
+    <string name="saved">Tersimpan</string>
+    <string name="start_an_radio">Radio</string>
+    <string name="add_to_an_playlist">Tambah</string>
+    <string name="more_label">Lainnya</string>
+    <string name="releases_for_you">Rilis untuk Anda</string>
+
+    <!-- Diagnostik / Debug -->
+    <string name="client_probe">Uji klien streaming</string>
+    <string name="client_probe_desc">Uji klien YouTube mana yang masih bisa mengembalikan stream yang bisa diputar</string>
+    <string name="client_probe_running">Menguji klien satu per satu. Ini butuh waktu sebentar.</string>
+    <string name="sort_by">Urutkan</string>
+    <string name="sort_descending">Menurun</string>
+
+    <!-- Lirik -->
+    <string name="lyrics_swipe_to_change_song">Geser untuk ganti lagu</string>
+    <string name="lyrics_swipe_to_change_song_desc">Geser kiri atau kanan di bagian nama artis dan lagu pada lirik layar penuh untuk mengganti lagu</string>
+    <string name="lyrics_thumbnail_play_pause">Tampilkan putar/jeda di thumbnail</string>
+    <string name="lyrics_thumbnail_play_pause_desc">Tampilkan tombol putar/jeda di atas thumbnail lagu pada lirik layar penuh</string>
+    <string name="one_tap_fullscreen_lyrics">Lirik layar penuh satu ketukan</string>
+    <string name="one_tap_fullscreen_lyrics_desc">Tombol lirik langsung membuka dan menutup lirik layar penuh dengan satu ketukan. Nonaktif menggunakan alur dua ketukan klasik (buka lirik, lalu ketuk lagi untuk layar penuh)</string>
+    <string name="fullscreen_lyrics_collapse_top">Ciutkan kontrol ke atas</string>
+    <string name="fullscreen_lyrics_collapse_top_desc">Saat memasuki lirik layar penuh, kontrol pemutar menciut ke atas. Nonaktifkan untuk menciut ke bawah</string>
+    <string name="lossless_fallback_to_standard_audio">Audio lossless tidak tersedia, beralih ke audio standar</string>
+    <string name="standard_lyrics_blur">Blur lirik standar</string>
+
+    <!-- Gambar / Kartu -->
+    <string name="change_card_image">Ganti gambar</string>
+    <string name="use_custom_image">Gunakan gambar kustom</string>
+    <string name="use_first_song_image">Gunakan gambar lagu pertama</string>
+
+    <!-- Tema -->
+    <string name="theme_desc">Sesuaikan tema aplikasi Anda</string>
+    <string name="apple_music_ui">Tampilan Apple Music</string>
+    <string name="apple_music_ui_desc">Gaya liquid glass iOS 26: bilah navigasi kaca mengambang dan ikon tab</string>
+    <string name="theme_colors">Tema &amp; Warna</string>
+    <string name="theme_mode">Mode Tema</string>
+    <string name="color_palette">Palet Warna</string>
+    <string name="theme_custom_color">Kustom</string>
+    <string name="use_system_colors">Gunakan warna sistem</string>
+    <string name="apple_music">Apple Music</string>
+
+    <!-- Grid dan Kartu -->
+    <string name="grid_and_cards">Grid &amp; Kartu</string>
+    <string name="grid_columns">Kolom grid</string>
+    <string name="grid_columns_desc">Jumlah kolom untuk grid pustaka, pencarian, dan penelusuran</string>
+    <string name="grid_card_height">Tinggi kartu</string>
+    <string name="grid_spacing">Jarak grid</string>
+    <string name="speed_dial_columns">Kolom Speed Dial</string>
+    <string name="home_hero_card_height">Tinggi kartu hero</string>
+    <string name="home_hero_card">Kartu hero</string>
+    <string name="home_hero_card_desc">Tampilkan kartu unggulan besar di bagian atas Beranda</string>
+    <string name="home_grid_columns">Kolom grid beranda</string>
+    <string name="speed_dial_card_height">Tinggi kartu Speed Dial</string>
+    <string name="home_card_corner_radius">Sudut bulat kartu beranda</string>
+    <string name="auto">Otomatis</string>
+    <string name="pure_black_hero_background">Latar belakang hitam pekat</string>
+    <string name="pure_black_hero_background_desc">Hitam datar menggantikan artwork blur pada halaman Artis, Album, Daftar Putar, dan Pencarian</string>
+
+    <!-- Paket Tema -->
+    <string name="theme_packs">Paket tema</string>
+    <string name="theme_pack_save_current">Simpan sebagai tema baru</string>
+    <string name="theme_pack_import">Impor tema dari file</string>
+    <string name="theme_pack_apply_hint">Ketuk untuk terapkan · ekspor atau hapus di kanan</string>
+    <string name="theme_pack_name">Nama tema</string>
+    <string name="theme_pack_imported">Tema berhasil diimpor</string>
+    <string name="theme_pack_import_failed">Tidak dapat membaca file tema tersebut</string>
+    <string name="theme_pack_apply_title">Terapkan tema</string>
+    <string name="theme_pack_apply_desc">Pilih apa yang ingin dibawa dari paket ini</string>
+    <string name="theme_pack_apply_button">Terapkan</string>
+    <string name="theme_category_colors">Warna (aksen + tema dinamis)</string>
+    <string name="theme_category_pure_black">Latar belakang hitam pekat</string>
+    <string name="theme_category_grid_sizing">Ukuran grid &amp; kartu</string>
+    <string name="theme_category_font">Font</string>
+    <string name="theme_category_library_background">Gaya latar pustaka</string>
+    <string name="theme_category_home_background">Latar beranda (gambar, blur, redupkan)</string>
+    <string name="home_background_video_set">Video ditetapkan</string>
+    <string name="home_background_video_warning">Latar video mendekode setiap frame, tidak seperti gambar biasa — ini dapat menguras baterai dan mungkin tersendat pada perangkat kelas bawah. Lanjutkan?</string>
+    <string name="home_background_video_confirm">Gunakan video ini</string>
+    <string name="home_background_too_large">File tersebut terlalu besar (maks %1$s). Pilih yang lebih kecil.</string>
+
+    <!-- Akun / Channel -->
+    <string name="switch_channel_title">Ketuk foto profil Anda, lalu pilih channel</string>
+    <string name="switch_channel_switched_title">Berhasil beralih — Anda bisa kembali sekarang</string>
+    <string name="switch_channel_success">Channel berhasil diganti</string>
+    <string name="switch_channel_action">Ganti channel YouTube</string>
+    <string name="switch_channel_action_desc">Gunakan channel lain di Akun Google Anda untuk pustaka, suka, dan daftar putar</string>
+    <string name="choose_channel_title">Pilih channel</string>
+    <string name="choose_channel_subtitle">Akun Google ini memiliki lebih dari satu channel YouTube</string>
+    <string name="saved_accounts_title">Akun</string>
+    <string name="saved_accounts_desc">Ketuk untuk beralih — tidak perlu masuk ulang</string>
+
+    <!-- Pemutar / Audio -->
+    <string name="show_audio_quality_badge">Tampilkan lencana kualitas audio</string>
+    <string name="mini_player_waveform">Bilah geser gelombang mini player</string>
+    <string name="mini_bar_tab_style">Mini bar multi-ikon</string>
+    <string name="mini_bar_tab_style_desc">Tampilkan baris transport lengkap (acak, sebelumnya, putar, berikutnya, ulang, lirik, antrean) sebagai pengganti tampilan thumbnail/seekbar/putar/maju sederhana</string>
+    <string name="network_ip_version">Versi IP Jaringan</string>
+    <string name="ip_version_auto">Otomatis</string>
+    <string name="ip_version_ipv4">IPv4 Paksa</string>
+    <string name="ip_version_ipv6">IPv6 Paksa</string>
+    <string name="audio_quality_lossless">Lossless</string>
+
+    <!-- Pembaruan -->
+    <string name="clear_downloaded_updates">Hapus pembaruan yang diunduh</string>
+    <string name="clear_downloaded_updates_desc">Hapus file APK yang diunduh untuk mengosongkan ruang</string>
+
+    <!-- Discord -->
+    <string name="discord_information">Convx menggunakan pustaka KizzyRPC untuk mengatur status akun Discord Anda. Hal ini melibatkan penggunaan sambungan Discord Gateway, yang dapat dianggap sebagai pelanggaran TOS Discord. Namun, tidak ada kasus yang diketahui tentang akun pengguna yang ditangguhkan karena alasan ini. Gunakan dengan risiko Anda sendiri.\n\nConvx hanya akan mengekstrak token Anda, dan yang lainnya disimpan secara lokal.</string>
+
+    <!-- Bluetooth / Perangkat Audio -->
+    <string name="bluetooth_permission_required">Izin Bluetooth diperlukan untuk menemukan perangkat audio.</string>
+    <string name="streaming_to">Streaming ke</string>
+    <string name="this_phone">Ponsel ini</string>
+    <string name="wired_headphones">Headphone kabel</string>
+    <string name="hdmi">HDMI</string>
+    <string name="phone_speaker">Speaker ponsel</string>
+    <string name="audio_quality_title">Kualitas Audio</string>
+    <string name="battery_content_desc">Level Baterai</string>
+    <string name="done">Selesai</string>
+    <string name="audio_devices">Perangkat audio</string>
+    <string name="bluetooth_headphones">Headphone Bluetooth</string>
+    <string name="license">GNU General Public License v3.0</string>
+
+    <!-- Listen Together -->
+    <string name="listen_together_smart_resync">Sinkronisasi Jaringan Cerdas</string>
+    <string name="listen_together_smart_resync_desc">Otomatis menyusul host setelah koneksi terputus</string>
+    <string name="listen_together_host_controls">Host mengontrol pemutaran dalam sesi ini</string>
+    <string name="listen_together_locked">Host mengontrol pemutaran</string>
+
+    <!-- JioSaavn -->
+    <string name="enable_saavn_streaming">Aktifkan Streaming JioSaavn</string>
+    <string name="enable_saavn_streaming_desc">Streaming audio dari JioSaavn sebagai pengganti YouTube Music (beralih ke YT jika tidak tersedia)</string>
+    <string name="saavn_audio_quality">Kualitas Audio JioSaavn</string>
+    <string name="retry_stream">Coba Ulang Stream</string>
+    <string name="retry_stream_desc_saavn">Ambil ulang dari JioSaavn dengan kualitas 320 kbps</string>
+    <string name="retry_stream_desc_yt">Ambil ulang dari YouTube Music</string>
+
+    <!-- Prompt Pencarian Dinamis -->
+    <string name="search_prompt_whats_on_mind">Apa yang ada di pikiranmu?</string>
+    <string name="search_prompt_todays_pick">Apa pilihan hari ini?</string>
+    <string name="search_prompt_trending">Cari lagu yang sedang tren…</string>
+    <string name="search_prompt_vibe">Lagi beruntung? Cari sesuai suasana…</string>
+    <string name="search_prompt_songs_artists">Cari lagu, artis, album…</string>
+    <string name="search_prompt_template_song">Cari \"%s\"…</string>
+    <string name="search_prompt_template_song_try">Coba cari \"%s\"…</string>
+    <string name="search_prompt_template_artist">Cari artis \"%s\"…</string>
+
+    <!-- Popup Pengaturan -->
+    <string name="enable_settings_popup">Aktifkan popup pengaturan</string>
+    <string name="enable_settings_popup_desc">Tampilkan popup pengaturan cepat saat mengetuk tombol pengaturan, alih-alih langsung membuka halaman pengaturan</string>
+
+    <!-- Liquid Glass -->
+    <string name="liquid_glass_highlight_color">Warna sorotan</string>
+    <string name="liquid_glass_highlight_color_desc">Warna tepi spekuler di sepanjang pinggiran permukaan kaca</string>
+    <string name="liquid_glass_highlight_opacity">Opasitas sorotan</string>
+    <string name="liquid_glass_highlight_opacity_desc">Seberapa terang tepi spekuler tampak</string>
+    <string name="liquid_glass_style">Gaya kaca</string>
+    <string name="liquid_glass_style_liquid">Cair</string>
+    <string name="liquid_glass_style_liquid_desc">Blur, refraksi, dan tepi menyala. Efek penuh, dan yang paling boros sumber daya.</string>
+    <string name="liquid_glass_style_blur">Blur</string>
+    <string name="liquid_glass_style_blur_desc">Blur beku tanpa refraksi atau tepi menyala. Lebih hemat.</string>
+    <string name="liquid_glass_style_transparent">Transparan</string>
+    <string name="liquid_glass_style_transparent_desc">Tint translusen biasa. Tidak ada yang ditangkap atau diblur, sehingga hampir tidak menggunakan sumber daya.</string>
+    <string name="liquid_glass_puck_color">Warna pil pilihan</string>
+    <string name="liquid_glass_puck_color_desc">Lapisan warna pada pil tab yang dipilih. Reset mengikuti tema.</string>
+    <string name="liquid_glass_puck_opacity">Opasitas pil pilihan</string>
+    <string name="liquid_glass_puck_opacity_desc">Seberapa kuat lapisan itu saat istirahat. Hilang saat ditekan.</string>
+
+    <!-- Ikon Aplikasi -->
+    <string name="app_icon">Ikon aplikasi</string>
+    <string name="app_icon_desc">Pilih ikon yang ditampilkan Convx di layar beranda Anda</string>
+    <string name="app_icon_change_warning">Ikon mungkin butuh beberapa detik untuk diperbarui, dan beberapa launcher dapat menghapus pintasan dari layar beranda Anda hingga Anda menambahkannya kembali.</string>
+    <string name="app_icon_white">Putih</string>
+    <string name="app_icon_azure">Biru Langit</string>
+    <string name="app_icon_sky">Langit</string>
+    <string name="app_icon_teal">Teal</string>
+    <string name="app_icon_slate">Abu Batu</string>
+    <string name="app_icon_silver">Perak</string>
+    <string name="app_icon_periwinkle">Ungu Muda</string>
+    <string name="app_icon_violet">Ungu</string>
+    <string name="app_icon_midnight">Tengah Malam</string>
+    <string name="app_icon_mauve">Mauve</string>
+    <string name="app_icon_rose">Merah Mawar</string>
+    <string name="app_icon_copper">Tembaga</string>
+    <string name="app_icon_rust">Karat</string>
+
+    <!-- Preset -->
+    <string name="presets">Preset</string>
+    <string name="presets_desc">Simpan, terapkan, dan bagikan tampilan lengkap</string>
+    <string name="preset_save_current">Simpan tampilan saat ini</string>
+    <string name="preset_name">Nama preset</string>
+    <string name="preset_apply">Terapkan</string>
+    <string name="preset_apply_desc">Pilih bagian mana dari preset ini yang ingin diterapkan. Apapun yang tidak dicentang tetap seperti sekarang.</string>
+    <string name="preset_applied">Preset diterapkan</string>
+    <string name="preset_rename">Ganti nama</string>
+    <string name="preset_share">Bagikan preset</string>
+    <string name="preset_delete">Hapus</string>
+    <string name="preset_empty">Belum ada preset. Simpan tampilan Anda saat ini untuk membuat preset.</string>
+    <string name="preset_imported">Preset berhasil diimpor</string>
+    <string name="preset_import_failed">File tersebut bukan preset yang valid.</string>
+    <string name="preset_import_too_large">Preset tersebut terlalu besar untuk diimpor.</string>
+    <string name="preset_import_newer_version">Preset tersebut dibuat dengan versi Convx yang lebih baru.</string>
+    <string name="preset_category_colors">Warna</string>
+    <string name="preset_category_layout">Tata letak dan ukuran</string>
+    <string name="preset_category_font">Font</string>
+    <string name="preset_category_player">Tampilan pemutar</string>
+    <string name="preset_category_lyrics">Gaya lirik</string>
+    <string name="preset_category_glass">Liquid glass</string>
+    <string name="preset_category_background">Wallpaper</string>
+    <string name="preset_category_player_icons">Ikon pemutar kustom</string>
+    <string name="preset_category_diy">Stiker DIY</string>
+
+    <!-- DIY Stiker -->
+    <string name="diy">DIY</string>
+    <string name="diy_desc">Letakkan stiker, gambar, dan emoji di atas pemutar</string>
+    <string name="diy_portrait">Potret</string>
+    <string name="diy_landscape">Lanskap</string>
+    <string name="diy_add_image">Tambah gambar</string>
+    <string name="diy_add_emoji">Tambah emoji</string>
+    <string name="diy_opacity">Opasitas</string>
+    <string name="diy_corner_radius">Sudut bulat</string>
+    <string name="diy_flip">Balik horizontal</string>
+    <string name="diy_shadow">Bayangan</string>
+    <string name="diy_bring_forward">Ke depan</string>
+    <string name="diy_send_backward">Ke belakang</string>
+    <string name="diy_delete">Hapus</string>
+    <string name="diy_behind_artwork">Di belakang artwork</string>
+    <string name="diy_above_artwork">Di depan artwork</string>
+    <string name="diy_low_resolution">Gambar ini diperbesar melampaui resolusinya sendiri dan mungkin terlihat buram.</string>
+    <string name="diy_limit_reached">Anda dapat menempatkan hingga %1$d stiker.</string>
+    <string name="diy_budget_reached">Penyimpanan stiker penuh. Hapus stiker untuk menambah yang baru.</string>
+    <string name="diy_cannot_add">Tidak dapat menambahkan itu</string>
+    <string name="diy_saved">Tata letak tersimpan</string>
+    <string name="diy_mock_title">Judul lagu</string>
+    <string name="diy_mock_artist">Nama artis</string>
+    <string name="diy_edit">Ubah</string>
+    <string name="diy_done">Selesai</string>
+    <string name="diy_undo">Batalkan</string>
+    <string name="diy_redo">Ulangi</string>
+    <string name="diy_rotation">Rotasi</string>
+    <string name="diy_size">Ukuran</string>
+
+    <!-- Ikon Pemutar Kustom -->
+    <string name="player_icons">Ikon pemutar kustom</string>
+    <string name="player_icons_desc">Ganti kontrol pemutar dengan gambar Anda sendiri. PNG, JPEG, WebP, atau SVG.</string>
+    <string name="player_icon_default">Bawaan</string>
+    <string name="player_icon_custom">Gambar kustom</string>
+    <string name="player_icon_tint">Warna tint</string>
+    <string name="player_icon_play">Putar</string>
+    <string name="player_icon_pause">Jeda</string>
+    <string name="player_icon_previous">Sebelumnya</string>
+    <string name="player_icon_next">Berikutnya</string>
+    <string name="player_icon_replay">Putar ulang</string>
+    <string name="player_icon_like">Suka</string>
+    <string name="player_icon_liked">Disukai</string>
+    <string name="player_icon_more">Lainnya</string>
+    <string name="player_icon_seek_thumb">Pegangan seekbar</string>
+
+    <!-- Impor Media -->
+    <string name="media_import_too_large">File tersebut terlalu besar.</string>
+    <string name="media_import_unsupported">Hanya gambar PNG, JPEG, WebP, dan SVG yang didukung.</string>
+    <string name="media_import_unsafe_svg">SVG tersebut menggunakan fitur yang tidak dapat dirender oleh Convx.</string>
+    <string name="media_import_corrupt">Gambar tersebut tidak dapat dibaca.</string>
+    <string name="media_import_too_many_pixels">Gambar tersebut terlalu besar untuk didekode dengan aman.</string>
+    <string name="media_import_io">Tidak dapat membaca file tersebut.</string>
+    <string name="preset_thumbnail_failed">Tidak dapat mengambil gambar pratinjau. Preset tetap akan disimpan.</string>
+    <string name="classic_player">Pemutar Klasik</string>
+    <string name="force_tablet_layout">Mode Tampilan Tablet (Tab View)</string>
+    <string name="force_tablet_layout_desc">Tampilkan sidebar floating dan tata letak tablet Apple Music di HP</string>
 </resources>
+

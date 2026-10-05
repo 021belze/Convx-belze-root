@@ -27,9 +27,12 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -173,6 +176,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.convx.music.constants.AppBarHeight
 import com.convx.music.constants.AppLanguageKey
+import com.convx.music.constants.ChipSortTypeKey
+import com.convx.music.constants.LibraryFilter
 import com.convx.music.constants.DarkModeKey
 import com.convx.music.constants.DefaultOpenTabKey
 import com.convx.music.constants.DisableScreenshotKey
@@ -354,6 +359,14 @@ private val themeColorCache = android.util.LruCache<String, androidx.compose.ui.
 // false => record 16.9ms / issue 19.7ms. The gap is the forced full-tree re-record in
 // LayerBackdropNode.draw(); the fix is to give the subtree RenderNodes, not to drop glass.
 private val TabRootRoutes = setOf(Screens.Home.route, Screens.Songs.route, Screens.Library.route, Screens.Settings.route)
+
+private val SidebarExcludedRoutes = setOf(
+    "ambient_mode",
+    "settings/appearance/diy",
+    "listen_together/chat",
+    "wrapped",
+    "update",
+)
 
 private const val DIAG_DISABLE_BACKDROP = false
 
@@ -1161,7 +1174,7 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(currentRoute) {
                     val route = currentRoute
-                    if (searchOverlayOpen && route != null && route !in topLevelScreens && route != Screens.Search.route && route != "search_input" && !route.startsWith("search/")) {
+                    if (searchOverlayOpen && route != null && route != Screens.Search.route && route != "search_input" && !route.startsWith("search/")) {
                         searchOverlayOpen = false
                         searchKeyboardActive = false
                     }
@@ -1206,8 +1219,12 @@ class MainActivity : ComponentActivity() {
                 val showRail = forceTabletLayout || isWideScreen
                 val (sideBarCollapsed, onSideBarCollapsedChange) = rememberPreference(SideBarCollapsedKey, defaultValue = false)
                 val sideBarContentInset by animateDpAsState(
-                    targetValue = if (sideBarCollapsed) SideBarCollapsedWidth + SideBarMargin * 2 else SideBarContentInset,
-                    animationSpec = spring(0.9f, 400f),
+                    targetValue = if (showRail) {
+                        if (sideBarCollapsed) SideBarCollapsedWidth + SideBarMargin * 2 else SideBarContentInset
+                    } else {
+                        0.dp
+                    },
+                    animationSpec = Motion.select(),
                     label = "sideBarContentInset",
                 )
 
@@ -1281,7 +1298,7 @@ class MainActivity : ComponentActivity() {
                         // padding, so rows start clear of the panel but the list
                         // still spans the full width and scrolls under its glass.
                         .add(
-                            WindowInsets(left = if (showRail) sideBarContentInset else 0.dp)
+                            WindowInsets(left = sideBarContentInset)
                         )
                 }
                 appBarScrollBehavior(
@@ -1740,7 +1757,7 @@ class MainActivity : ComponentActivity() {
                                             // used to be — it reaches the top bar's row,
                                             // so the bar needs the same start inset every
                                             // screen's own content already gets.
-                                            .padding(start = if (showRail) sideBarContentInset else 0.dp)
+                                            .padding(start = sideBarContentInset)
                                     )
                                     }
                                 }
@@ -1762,7 +1779,11 @@ class MainActivity : ComponentActivity() {
                                     // bar's search circle.
                                     if (screen == Screens.Search) {
                                         enterSearch()
-                                    } else if (isSelected) {
+                                    } else {
+                                        if (searchOverlayOpen) {
+                                            dismissSearchOverlay()
+                                        }
+                                        if (isSelected) {
                                         if (effectiveRoute != screen.route) {
                                             val popped = navController.popBackStack(screen.route, inclusive = false)
                                             if (!popped) {
@@ -1816,6 +1837,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            }
 
                             val onSearchLongClick: () -> Unit = remember(navController) {
                                 {
@@ -1825,33 +1847,17 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Pre-calculate values for graphicsLayer to avoid reading state during composition
                             val navBarTotalHeight = bottomInset + NavigationBarHeight
+                            val showPhoneNavBar = !showRail && !showSettingDialoge &&
+                                currentRoute?.startsWith("settings/") != true &&
+                                currentRoute !in setOf("wrapped", "update", "listen_together/chat", "login", "equalizer", "ambient_mode")
+                            val showBottomSheetPlayer = currentRoute != "wrapped" &&
+                                currentRoute != "update" &&
+                                currentRoute != "listen_together/chat" &&
+                                currentRoute != "ambient_mode"
 
-                            if (!showRail && !showSettingDialoge && currentRoute?.startsWith("settings/") != true && currentRoute !in setOf("wrapped", "update", "listen_together/chat", "login", "equalizer", "ambient_mode")) {
-                                Box {
-                                    // Apple Music-style progressive scrim: content fades out under
-                                    // the floating glass bar instead of hard-clipping, so the bar
-                                    // stays legible over bright artwork.  The horizontal gradient
-                                    // on the left/right edges mimics Apple Music's edge blur.
-                                    if (appleMusicUi && isGlassAllowed()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .fillMaxWidth()
-                                                .height(navBarTotalHeight + 56.dp)
-                                                .background(
-                                                    Brush.verticalGradient(
-                                                        0f to Color.Transparent,
-                                                        0.35f to baseBg.copy(alpha = 0.15f),
-                                                        0.6f to baseBg.copy(alpha = 0.4f),
-                                                        0.85f to baseBg.copy(alpha = 0.7f),
-                                                        1f to baseBg,
-                                                    )
-                                                )
-                                        )
-                                    }
-
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                if (showBottomSheetPlayer) {
                                     Box(
                                         // Above the bars for as long as the player is anything
                                         // other than fully collapsed, so the growing container
@@ -1874,26 +1880,38 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
+                                }
 
-                                    // Use graphicsLayer instead of offset to avoid recomposition
-                                    // graphicsLayer runs during draw phase, not composition phase
-                                    val navBarGraphicsLayer: Modifier = Modifier.graphicsLayer {
-                                        val navBarHeightPx = navigationBarHeight.toPx()
-                                        val totalHeightPx = navBarTotalHeight.toPx()
-
-                                        translationY = if (navBarHeightPx == 0f) {
-                                            totalHeightPx
-                                        } else {
-                                            // Read progress only during draw phase
-                                            val progress = playerBottomSheetState.progress.coerceIn(0f, 1f)
-                                            val slideOffset = totalHeightPx * progress
-                                            val hideOffset = totalHeightPx * (1 - navBarHeightPx / NavigationBarHeight.toPx())
-                                            slideOffset + hideOffset
+                                AnimatedVisibility(
+                                    visible = showPhoneNavBar,
+                                    enter = slideInVertically(tween(300, easing = Motion.PushEasing)) { it } + fadeIn(tween(250)),
+                                    exit = slideOutVertically(tween(280, easing = Motion.PushEasing)) { it } + fadeOut(tween(200)),
+                                    modifier = Modifier.align(Alignment.BottomCenter),
+                                ) {
+                                    Box {
+                                        // Apple Music-style progressive scrim: content fades out under
+                                        // the floating glass bar instead of hard-clipping, so the bar
+                                        // stays legible over bright artwork.  The horizontal gradient
+                                        // on the left/right edges mimics Apple Music's edge blur.
+                                        if (appleMusicUi && isGlassAllowed()) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .fillMaxWidth()
+                                                    .height(navBarTotalHeight + 56.dp)
+                                                    .background(
+                                                        Brush.verticalGradient(
+                                                            0f to Color.Transparent,
+                                                            0.35f to baseBg.copy(alpha = 0.15f),
+                                                            0.6f to baseBg.copy(alpha = 0.4f),
+                                                            0.85f to baseBg.copy(alpha = 0.7f),
+                                                            1f to baseBg,
+                                                        )
+                                                    )
+                                            )
                                         }
 
-                                    }
-
-                                    AppFloatingNavBar(
+                                        AppFloatingNavBar(
                                         navigationItems = floatingNavigationItems,
                                         currentRoute = effectiveRoute,
                                         onItemClick = onNavItemClick,
@@ -1942,27 +1960,18 @@ class MainActivity : ComponentActivity() {
 
                                             }
                                     )
-
-
                                 }
-                            } else {
-                                if (currentRoute != "wrapped" && currentRoute != "update" && currentRoute != "listen_together/chat" && currentRoute != "ambient_mode") {
-                                    // Same isolation as the floating-bar branch above.
-                                    CompositionLocalProvider(
-                                        LocalDynamicPlayerThemeColor provides themeColor
-                                    ) {
-                                        BottomSheetPlayer(
-                                            state = playerBottomSheetState,
-                                            navController = navController,
-                                            pureBlack = pureBlack
-                                        )
-                                    }
-                                }
+                            }
 
+                            AnimatedVisibility(
+                                visible = showRail,
+                                enter = fadeIn(tween(200)),
+                                exit = fadeOut(tween(150)),
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .align(Alignment.BottomCenter)
                                         .height(bottomInsetDp)
                                         // Use graphicsLayer for background color changes
                                         .graphicsLayer {
@@ -1972,13 +1981,14 @@ class MainActivity : ComponentActivity() {
                                         .background(baseBg)
                                 )
                             }
-                        },
+                        }
+                    },
                         modifier = Modifier
                             .fillMaxSize()
                             .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                     ) {
                         Box(Modifier.fillMaxSize()) {
-                            val onRailItemClick: (Screens, Boolean) -> Unit = remember(navController, coroutineScope, topAppBarScrollBehavior, playerBottomSheetState, enterSearch) {
+                            val onRailItemClick: (Screens, Boolean) -> Unit = remember(navController, coroutineScope, topAppBarScrollBehavior, playerBottomSheetState, enterSearch, dismissSearchOverlay) {
                                 var lastNavRoute: String? = null
                                 var lastNavTimeMs = 0L
                                 { screen: Screens, isSelected: Boolean ->
@@ -1993,10 +2003,35 @@ class MainActivity : ComponentActivity() {
                                     // bar's search circle.
                                     if (screen == Screens.Search) {
                                         enterSearch()
-                                    } else if (isSelected) {
-                                        if (effectiveRoute != screen.route) {
-                                            val popped = navController.popBackStack(screen.route, inclusive = false)
-                                            if (!popped) {
+                                    } else {
+                                        if (searchOverlayOpen) {
+                                            dismissSearchOverlay()
+                                        }
+                                        if (isSelected) {
+                                            if (effectiveRoute != screen.route) {
+                                                val popped = navController.popBackStack(screen.route, inclusive = false)
+                                                if (!popped) {
+                                                    navController.navigate(screen.route) {
+                                                        popUpTo(navController.graph.startDestinationId) {
+                                                            saveState = true
+                                                        }
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }
+                                                }
+                                            } else {
+                                                navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
+                                                coroutineScope.launch {
+                                                    topAppBarScrollBehavior.state.resetHeightOffset()
+                                                }
+                                            }
+                                        } else {
+                                            val now = SystemClock.elapsedRealtime()
+                                            if (screen.route != lastNavRoute || now - lastNavTimeMs >= NavDebounceMs) {
+                                                lastNavRoute = screen.route
+                                                lastNavTimeMs = now
+                                                // Plain navigate() with the standard multi-back-stack
+                                                // pattern, same as every other route.
                                                 navController.navigate(screen.route) {
                                                     popUpTo(navController.graph.startDestinationId) {
                                                         saveState = true
@@ -2004,26 +2039,6 @@ class MainActivity : ComponentActivity() {
                                                     launchSingleTop = true
                                                     restoreState = true
                                                 }
-                                            }
-                                        } else {
-                                            navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
-                                            coroutineScope.launch {
-                                                topAppBarScrollBehavior.state.resetHeightOffset()
-                                            }
-                                        }
-                                    } else {
-                                        val now = SystemClock.elapsedRealtime()
-                                        if (screen.route != lastNavRoute || now - lastNavTimeMs >= NavDebounceMs) {
-                                            lastNavRoute = screen.route
-                                            lastNavTimeMs = now
-                                            // Plain navigate() with the standard multi-back-stack
-                                            // pattern, same as every other route.
-                                            navController.navigate(screen.route) {
-                                                popUpTo(navController.graph.startDestinationId) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
                                             }
                                         }
                                     }
@@ -2140,14 +2155,18 @@ class MainActivity : ComponentActivity() {
                                     // non-morph push (settings sub-pages most visibly) look
                                     // broken. Pop happened to be correct by accident.
                                     enterTransition = {
-                                        slideInHorizontally(Motion.push()) { it }
+                                        if (showRail) {
+                                            fadeIn(tween(200, easing = FastOutSlowInEasing)) +
+                                                scaleIn(tween(200, easing = FastOutSlowInEasing), initialScale = 0.96f)
+                                        } else {
+                                            slideInHorizontally(Motion.push()) { it }
+                                        }
                                     },
                                     exitTransition = {
-                                        // A destination that grows out of one of this
-                                        // screen's tiles must not slide it away underneath:
-                                        // the tile is the thing the next screen is coming
-                                        // out of, so this one holds still and dims.
-                                        if (isMorphRoute(targetState.destination.route)) {
+                                        if (showRail) {
+                                            fadeOut(tween(180, easing = FastOutSlowInEasing), targetAlpha = 0.8f) +
+                                                scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.97f)
+                                        } else if (isMorphRoute(targetState.destination.route)) {
                                             fadeOut(tween(200), targetAlpha = 0.7f)
                                         } else {
                                             slideOutHorizontally(Motion.push()) {
@@ -2155,23 +2174,15 @@ class MainActivity : ComponentActivity() {
                                             } + fadeOut(Motion.push(), targetAlpha = Motion.PushDimAlpha)
                                         }
                                     },
-                                    // Pop is a plain crossfade -- both directions, every
-                                    // route, morph or not. Predictive back scrubs whatever
-                                    // spec is here by the GESTURE's live drag progress rather
-                                    // than running it on a timer, and only a plain alpha tween
-                                    // scrubs cleanly: a fraction of a fade is still a smaller
-                                    // fade, but a fraction of a slide-with-parallax-offset (or
-                                    // the morph's spring-driven shrink-to-tile) has no clean
-                                    // meaning at partial progress, which is what was showing up
-                                    // as the outgoing and incoming screens seemingly both
-                                    // sliding into place at once during a back-gesture drag.
-                                    // Push keeps its slide/morph above -- only pop needed to
-                                    // change, since only pop is ever gesture-driven.
+                                    // Pop keeps linear/smooth tweens for predictive back scrubbing,
+                                    // with micro-scale for depth cue.
                                     popEnterTransition = {
-                                        fadeIn(tween(220))
+                                        fadeIn(tween(200, easing = FastOutSlowInEasing)) +
+                                            scaleIn(tween(200, easing = FastOutSlowInEasing), initialScale = 0.98f)
                                     },
                                     popExitTransition = {
-                                        fadeOut(tween(220))
+                                        fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                                            scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.96f)
                                     },
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
@@ -2249,7 +2260,7 @@ class MainActivity : ComponentActivity() {
                             // the same way ambient_mode is already excluded from the bottom/
                             // floating nav bar above, or the rail floats over its full-screen
                             // visualizer with no route-based reason to.
-                            if (showRail && currentRoute != "ambient_mode" && currentRoute != "settings/appearance/diy") {
+                            val showTabletSidebar = showRail && currentRoute !in SidebarExcludedRoutes
                                 // No global floating Back here anymore: each screen's own
                                 // back button (TopAppBar nav icon or floating chrome row)
                                 // now insets clear of the side panel, so a second global
@@ -2259,6 +2270,10 @@ class MainActivity : ComponentActivity() {
                                 // here, plus the user's pinned playlists â€” the DAO's
                                 // playlists() already filters to bookmarkedAt, so this
                                 // is the pinned set, not every local playlist.
+                                val (currentLibraryFilter, onLibraryFilterChange) = rememberEnumPreference(
+                                    ChipSortTypeKey,
+                                    defaultValue = LibraryFilter.LIBRARY
+                                )
                                 val sidebarPlaylists by database
                                     .playlists(PlaylistSortType.NAME, descending = false)
                                     .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -2267,6 +2282,8 @@ class MainActivity : ComponentActivity() {
                                     showStatsButton,
                                     listenTogetherInTopBar,
                                     sidebarPlaylists,
+                                    effectiveRoute,
+                                    currentLibraryFilter,
                                 ) {
                                     buildList {
                                         val quick = buildList {
@@ -2275,7 +2292,11 @@ class MainActivity : ComponentActivity() {
                                                     SideBarLink(
                                                         label = getString(R.string.history),
                                                         iconRes = R.drawable.music_history,
-                                                        onClick = { navController.navigate("history") },
+                                                        isSelected = effectiveRoute == "history",
+                                                        onClick = {
+                                                            if (searchOverlayOpen) dismissSearchOverlay()
+                                                            navController.navigate("history")
+                                                        },
                                                     )
                                                 )
                                             }
@@ -2284,7 +2305,11 @@ class MainActivity : ComponentActivity() {
                                                     SideBarLink(
                                                         label = getString(R.string.stats),
                                                         iconRes = R.drawable.stats,
-                                                        onClick = { navController.navigate("stats") },
+                                                        isSelected = effectiveRoute == "stats",
+                                                        onClick = {
+                                                            if (searchOverlayOpen) dismissSearchOverlay()
+                                                            navController.navigate("stats")
+                                                        },
                                                     )
                                                 )
                                             }
@@ -2293,7 +2318,9 @@ class MainActivity : ComponentActivity() {
                                                     SideBarLink(
                                                         label = getString(R.string.together),
                                                         iconRes = R.drawable.group_outlined,
+                                                        isSelected = effectiveRoute == "listen_together_from_topbar" || effectiveRoute == Screens.ListenTogether.route,
                                                         onClick = {
+                                                            if (searchOverlayOpen) dismissSearchOverlay()
                                                             navController.navigate("listen_together_from_topbar")
                                                         },
                                                     )
@@ -2302,125 +2329,188 @@ class MainActivity : ComponentActivity() {
                                         }
                                         if (quick.isNotEmpty()) add(SideBarSection(links = quick))
 
+                                        // Library shortcuts (Apple Music iPad style)
+                                        val isLibraryRoute = effectiveRoute == Screens.Library.route
+                                        val libraryShortcuts = listOf(
+                                            SideBarLink(
+                                                label = getString(R.string.filter_playlists),
+                                                iconRes = R.drawable.playlist_play,
+                                                isSelected = isLibraryRoute && currentLibraryFilter == LibraryFilter.PLAYLISTS,
+                                                onClick = {
+                                                    if (searchOverlayOpen) dismissSearchOverlay()
+                                                    onLibraryFilterChange(LibraryFilter.PLAYLISTS)
+                                                    if (!isLibraryRoute) onRailItemClick(Screens.Library, false)
+                                                },
+                                            ),
+                                            SideBarLink(
+                                                label = getString(R.string.filter_songs),
+                                                iconRes = R.drawable.music_note,
+                                                isSelected = isLibraryRoute && currentLibraryFilter == LibraryFilter.SONGS,
+                                                onClick = {
+                                                    if (searchOverlayOpen) dismissSearchOverlay()
+                                                    onLibraryFilterChange(LibraryFilter.SONGS)
+                                                    if (!isLibraryRoute) onRailItemClick(Screens.Library, false)
+                                                },
+                                            ),
+                                            SideBarLink(
+                                                label = getString(R.string.filter_albums),
+                                                iconRes = R.drawable.album,
+                                                isSelected = isLibraryRoute && currentLibraryFilter == LibraryFilter.ALBUMS,
+                                                onClick = {
+                                                    if (searchOverlayOpen) dismissSearchOverlay()
+                                                    onLibraryFilterChange(LibraryFilter.ALBUMS)
+                                                    if (!isLibraryRoute) onRailItemClick(Screens.Library, false)
+                                                },
+                                            ),
+                                            SideBarLink(
+                                                label = getString(R.string.filter_artists),
+                                                iconRes = R.drawable.artist,
+                                                isSelected = isLibraryRoute && currentLibraryFilter == LibraryFilter.ARTISTS,
+                                                onClick = {
+                                                    if (searchOverlayOpen) dismissSearchOverlay()
+                                                    onLibraryFilterChange(LibraryFilter.ARTISTS)
+                                                    if (!isLibraryRoute) onRailItemClick(Screens.Library, false)
+                                                },
+                                            ),
+                                        )
+                                        add(
+                                            SideBarSection(
+                                                title = getString(R.string.filter_library),
+                                                links = libraryShortcuts,
+                                                isCollapsible = true,
+                                                defaultCollapsed = false,
+                                            )
+                                        )
+
                                         if (sidebarPlaylists.isNotEmpty()) {
                                             add(
                                                 SideBarSection(
                                                     title = getString(R.string.playlists),
                                                     links = sidebarPlaylists.map { playlist ->
+                                                        val route = "local_playlist/${playlist.id}"
                                                         SideBarLink(
                                                             label = playlist.playlist.name,
                                                             thumbnailUrl = playlist.thumbnails.firstOrNull(),
+                                                            isSelected = effectiveRoute == route,
                                                             onClick = {
-                                                                navController.navigate(
-                                                                    "local_playlist/${playlist.id}"
-                                                                )
+                                                                if (searchOverlayOpen) dismissSearchOverlay()
+                                                                navController.navigate(route)
                                                             },
                                                         )
                                                     },
+                                                    isCollapsible = true,
+                                                    defaultCollapsed = false,
                                                 )
                                             )
                                         }
                                     }
                                 }
 
-                                AppFloatingSideBar(
-                                    navigationItems = navigationItems,
-                                    currentRoute = effectiveRoute,
-                                    onItemClick = onRailItemClick,
-                                    sections = sidebarSections,
-                                    pureBlack = pureBlack,
-                                    collapsed = sideBarCollapsed,
-                                    onToggleCollapsed = { onSideBarCollapsedChange(!sideBarCollapsed) },
-                                    footer = { footerCollapsed ->
-                                        SideBarAccountRow(
-                                            accountImageUrl = accountImageUrl,
-                                            collapsed = footerCollapsed,
-                                            onClick = {
-                                                if (enableSettingsPopup) {
-                                                    showSettingDialoge = true
-                                                } else {
-                                                    navController.navigate(Screens.Settings.route) {
-                                                        popUpTo(navController.graph.startDestinationId) {
-                                                            saveState = true
+                            AnimatedVisibility(
+                                visible = showTabletSidebar,
+                                enter = slideInHorizontally(tween(320, easing = Motion.PushEasing)) { -it } + fadeIn(tween(260)),
+                                exit = slideOutHorizontally(tween(300, easing = Motion.PushEasing)) { -it } + fadeOut(tween(220)),
+                                modifier = Modifier.align(Alignment.CenterStart),
+                            ) {
+                                CompositionLocalProvider(
+                                    LocalDynamicPlayerThemeColor provides themeColor
+                                ) {
+                                    AppFloatingSideBar(
+                                        navigationItems = navigationItems,
+                                        currentRoute = effectiveRoute,
+                                        onItemClick = onRailItemClick,
+                                        sections = sidebarSections,
+                                        pureBlack = pureBlack,
+                                        collapsed = sideBarCollapsed,
+                                        onToggleCollapsed = { onSideBarCollapsedChange(!sideBarCollapsed) },
+                                        footer = { footerCollapsed ->
+                                            SideBarAccountRow(
+                                                accountImageUrl = accountImageUrl,
+                                                collapsed = footerCollapsed,
+                                                onClick = {
+                                                    if (searchOverlayOpen) dismissSearchOverlay()
+                                                    if (enableSettingsPopup) {
+                                                        showSettingDialoge = true
+                                                    } else {
+                                                        navController.navigate(Screens.Settings.route) {
+                                                            popUpTo(navController.graph.startDestinationId) {
+                                                                saveState = true
+                                                            }
+                                                            launchSingleTop = true
+                                                            restoreState = true
                                                         }
-                                                        launchSingleTop = true
-                                                        restoreState = true
                                                     }
-                                                }
-                                            },
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.CenterStart)
-                                        .windowInsetsPadding(
-                                            windowsInsets.only(WindowInsetsSides.Vertical)
-                                        )
-                                        .padding(start = SideBarMargin, top = 8.dp, bottom = 8.dp),
-                                )
+                                                },
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .windowInsetsPadding(
+                                                windowsInsets.only(WindowInsetsSides.Vertical)
+                                            )
+                                            .padding(start = SideBarMargin, top = 8.dp, bottom = 8.dp),
+                                    )
+                                }
+                            }
 
-                                // The phone bar's docked accessory, floating free on
-                                // the opposite edge â€” same pill, same glass, bottom
-                                // right rather than centred. Swaps for the real
-                                // search input bar while searching, same slide+fade
-                                // the phone's own AppFloatingNavBar uses to hide its
-                                // mini player for the keyboard.
-                                if (playerMediaMetadata != null || inSearchScreen) {
-                                    // Centred on the content area, not the screen:
-                                    // the side bar's space is padded out first, and
-                                    // the pill takes 80% of whatever is left.
-                                    BoxWithConstraints(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .padding(start = sideBarContentInset),
+                            // The phone bar's docked accessory, floating free on
+                            // the opposite edge — same pill, same glass, bottom
+                            // right rather than centred. Swaps for the real
+                            // search input bar while searching with smooth slide+fade.
+                            AnimatedVisibility(
+                                visible = showTabletSidebar,
+                                enter = slideInVertically(tween(300, easing = Motion.PushEasing)) { it } + fadeIn(tween(250)),
+                                exit = slideOutVertically(tween(280, easing = Motion.PushEasing)) { it } + fadeOut(tween(200)),
+                            ) {
+                                BoxWithConstraints(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(start = sideBarContentInset),
+                                ) pillScope@{
+                                    val pillWidth = maxWidth * FloatingMiniPlayerWidthFraction
+                                    val pillEnter = slideInVertically(
+                                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                                    ) { it } + fadeIn(tween(180))
+                                    val pillExit = slideOutVertically(
+                                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                                    ) { it } + fadeOut(tween(160))
+
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .windowInsetsPadding(
+                                                windowsInsets.only(WindowInsetsSides.Bottom)
+                                            )
+                                            .padding(bottom = 12.dp)
                                     ) {
-                                        val pillWidth = maxWidth * FloatingMiniPlayerWidthFraction
-                                        AnimatedContent(
-                                            targetState = inSearchScreen,
-                                            transitionSpec = {
-                                                if (targetState) {
-                                                    (slideInVertically(
-                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-                                                    ) { it / 2 } + fadeIn()) togetherWith
-                                                        (slideOutVertically(
-                                                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                                                        ) { it } + fadeOut())
-                                                } else {
-                                                    (slideInVertically(
-                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-                                                    ) { it } + fadeIn()) togetherWith
-                                                        (slideOutVertically(
-                                                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                                                        ) { it / 2 } + fadeOut())
-                                                }
-                                            },
-                                            modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .windowInsetsPadding(
-                                                    windowsInsets.only(WindowInsetsSides.Bottom)
-                                                )
-                                                .padding(bottom = 12.dp),
-                                            label = "tabViewSearchPill",
-                                        ) { searching ->
-                                            if (searching) {
-                                                NavBarSearchInputBar(
-                                                    state = navSearchState,
-                                                    pureBlack = pureBlack,
-                                                    modifier = Modifier.width(pillWidth),
-                                                )
-                                            } else if (playerMediaMetadata != null) {
-                                                AppFloatingNowPlayingPill(
-                                                    onClick = { playerBottomSheetState.expandSoft() },
-                                                    onLyricsClick = {
-                                                        playerBottomSheetState.expandSoft()
-                                                        playerConnection?.requestShowLyrics?.value = true
-                                                    },
-                                                    onQueueClick = {
-                                                        playerBottomSheetState.expandSoft()
-                                                        playerConnection?.requestShowQueue?.value = true
-                                                    },
-                                                    pureBlack = pureBlack,
-                                                )
-                                            }
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = inSearchScreen,
+                                            enter = pillEnter,
+                                            exit = pillExit,
+                                        ) {
+                                            NavBarSearchInputBar(
+                                                state = navSearchState,
+                                                pureBlack = pureBlack,
+                                                modifier = Modifier.width(pillWidth),
+                                            )
+                                        }
+
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = !inSearchScreen && playerMediaMetadata != null,
+                                            enter = pillEnter,
+                                            exit = pillExit,
+                                        ) {
+                                            this@pillScope.AppFloatingNowPlayingPill(
+                                                onClick = { playerBottomSheetState.expandSoft() },
+                                                onLyricsClick = {
+                                                    playerBottomSheetState.expandSoft()
+                                                    playerConnection?.requestShowLyrics?.value = true
+                                                },
+                                                onQueueClick = {
+                                                    playerBottomSheetState.expandSoft()
+                                                    playerConnection?.requestShowQueue?.value = true
+                                                },
+                                                pureBlack = pureBlack,
+                                            )
                                         }
                                     }
                                 }

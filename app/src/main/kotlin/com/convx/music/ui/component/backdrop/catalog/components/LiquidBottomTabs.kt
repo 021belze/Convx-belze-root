@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -120,22 +121,20 @@ fun LiquidBottomTabs(
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
-        var currentIndex by remember(selectedTabIndex) {
-            mutableIntStateOf(selectedTabIndex())
-        }
+        val targetIndex = selectedTabIndex()
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
                 animationScope = animationScope,
-                initialValue = selectedTabIndex().toFloat(),
+                initialValue = targetIndex.toFloat(),
                 valueRange = 0f..(tabsCount - 1).toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
                 pressedScale = 78f / 56f,
                 onDragStarted = {},
                 onDragStopped = {
-                    val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
-                    currentIndex = targetIndex
-                    animateToValue(targetIndex.toFloat())
+                    val newIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                    animateToValue(newIndex.toFloat())
+                    onTabSelected(newIndex)
                     animationScope.launch {
                         offsetAnimation.animateTo(
                             0f,
@@ -154,19 +153,10 @@ fun LiquidBottomTabs(
                 }
             )
         }
-        LaunchedEffect(selectedTabIndex) {
-            snapshotFlow { selectedTabIndex() }
-                .collectLatest { index ->
-                    currentIndex = index
-                }
-        }
-        LaunchedEffect(dampedDragAnimation) {
-            snapshotFlow { currentIndex }
-                .drop(1)
-                .collectLatest { index ->
-                    dampedDragAnimation.animateToValue(index.toFloat())
-                    onTabSelected(index)
-                }
+        LaunchedEffect(targetIndex) {
+            if (dampedDragAnimation.targetValue.fastRoundToInt() != targetIndex) {
+                dampedDragAnimation.animateToValue(targetIndex.toFloat())
+            }
         }
 
         val interactiveHighlight = remember(animationScope) {
@@ -254,6 +244,7 @@ fun LiquidBottomTabs(
 
         Box(
             Modifier
+                .zIndex(-1f)
                 .padding(horizontal = 4f.dp)
                 .graphicsLayer {
                     translationX =

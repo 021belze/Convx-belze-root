@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Convx Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
@@ -45,8 +45,8 @@ class CachePlaylistViewModel @Inject constructor(
             while (true) {
                 val hideExplicit = context.dataStore.get(HideExplicitKey, false)
                 val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false) || context.dataStore.get(DataSaverEnabledKey, false)
-                val cachedIds = playerCache.keys.toSet()
-                val downloadedIds = downloadCache.keys.toSet()
+                val cachedIds = playerCache.keys.map { it.substringBefore('#') }.filter { it.isNotBlank() }.toSet()
+                val downloadedIds = downloadCache.keys.map { it.substringBefore('#') }.filter { it.isNotBlank() }.toSet()
                 val pureCacheIds = cachedIds.subtract(downloadedIds)
 
                 val songs = if (pureCacheIds.isNotEmpty()) {
@@ -55,9 +55,15 @@ class CachePlaylistViewModel @Inject constructor(
                     emptyList()
                 }
 
-                val completeSongs = songs.filter {
-                    val contentLength = it.format?.contentLength
-                    contentLength != null && playerCache.isCached(it.song.id, 0, contentLength)
+                val completeSongs = songs.filter { song ->
+                    val id = song.song.id
+                    val cachedBytes = maxOf(
+                        playerCache.getCachedBytes(id, 0, Long.MAX_VALUE),
+                        playerCache.getCachedBytes("$id#flac", 0, Long.MAX_VALUE),
+                        playerCache.getCachedBytes("$id#saavn", 0, Long.MAX_VALUE)
+                    )
+                    val contentLength = song.format?.contentLength
+                    (contentLength != null && cachedBytes >= contentLength * 0.75f) || cachedBytes > 300_000L
                 }
 
                 if (completeSongs.isNotEmpty()) {
@@ -71,12 +77,11 @@ class CachePlaylistViewModel @Inject constructor(
                 }
 
                 _cachedSongs.value = completeSongs
-                    .filter { it.song.dateDownload != null }
-                    .sortedByDescending { it.song.dateDownload }
+                    .sortedByDescending { it.song.dateDownload ?: LocalDateTime.MIN }
                     .filterExplicit(hideExplicit)
                     .filterVideoSongs(hideVideoSongs)
 
-                delay(1000)
+                delay(2000)
             }
         }
     }

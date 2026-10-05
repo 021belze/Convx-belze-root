@@ -40,6 +40,15 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
+private data class ImageDims(
+    val coverArtDp: Float,
+    val coverCornerRadiusDp: Float,
+    val paddingDp: Float,
+    val initialFontDp: Float,
+    val minFontDp: Float,
+    val lineSpacingMult: Float
+)
+
 object ComposeToImage {
 
     suspend fun createLyricsImage(
@@ -151,28 +160,48 @@ object ComposeToImage {
         }
         
         // Base scale on width relative to the reference design (340dp)
-        // 2160 / 340 ≈ 6.35
         val scale = imageWidth / 340f
         
-        val cornerRadius = 20f * scale
+        val cornerRadius = 24f * scale
+
+        // Draw bottom gradient scrim on canvas for contrast
+        val scrimPaint = Paint().apply {
+            shader = LinearGradient(
+                0f, imageHeight - (200f * scale), 0f, imageHeight.toFloat(),
+                intArrayOf(0x00000000, 0x66000000),
+                null,
+                Shader.TileMode.CLAMP
+            )
+            isAntiAlias = true
+        }
+        canvas.drawRect(RectF(0f, imageHeight - (200f * scale), imageWidth.toFloat(), imageHeight.toFloat()), scrimPaint)
 
         // Draw inner border
         val borderPaint = Paint().apply {
             color = mainTextColor
-            alpha = (255 * 0.09).toInt()
+            alpha = (255 * 0.12).toInt()
             style = Paint.Style.STROKE
             strokeWidth = 1f * scale
             isAntiAlias = true
         }
         canvas.drawRoundRect(backgroundRect, cornerRadius, cornerRadius, borderPaint)
 
-        val padding = 28f * scale
+        // Calculate line count and adaptive dimensions
+        val lineCount = lyrics.lines().filter { it.isNotBlank() }.size.coerceAtLeast(1)
+        val dims = when {
+            lineCount == 1 -> ImageDims(76f, 16f, 28f, 32f, 24f, 1.3f)
+            lineCount <= 3 -> ImageDims(62f, 14f, 24f, 23f, 18f, 1.28f)
+            lineCount <= 6 -> ImageDims(48f, 12f, 20f, 18f, 13f, 1.22f)
+            else -> ImageDims(38f, 10f, 16f, 15f, 10f, 1.18f)
+        }
+
+        val padding = dims.paddingDp * scale
         
         // --- Header Section ---
-        val coverArtSize = 64f * scale
-        val headerBottomPadding = 12f * scale
+        val coverArtSize = dims.coverArtDp * scale
+        val headerBottomPadding = 10f * scale
+        val coverCornerRadius = dims.coverCornerRadiusDp * scale
         
-        val coverCornerRadius = 3f * scale
         coverArtBitmap?.let {
             val rect = RectF(padding, padding, padding + coverArtSize, padding + coverArtSize)
             val path = Path().apply {
@@ -182,9 +211,9 @@ object ComposeToImage {
             // Draw border for cover art
             val coverBorderPaint = Paint().apply {
                 color = mainTextColor
-                alpha = (255 * 0.16).toInt()
+                alpha = (255 * 0.20).toInt()
                 style = Paint.Style.STROKE
-                strokeWidth = 1f * scale
+                strokeWidth = 1.2f * scale
                 isAntiAlias = true
             }
 
@@ -195,19 +224,22 @@ object ComposeToImage {
             canvas.drawRoundRect(rect, coverCornerRadius, coverCornerRadius, coverBorderPaint)
         }
 
-        val textStartX = padding + coverArtSize + (16f * scale)
+        val textStartX = padding + coverArtSize + (14f * scale)
         val textMaxWidth = imageWidth - textStartX - padding
         
+        val titleTextSize = (if (lineCount <= 3) 19f else 16f) * scale
+        val artistTextSize = (if (lineCount <= 3) 15f else 13f) * scale
+
         val titlePaint = TextPaint().apply {
             color = mainTextColor
-            textSize = 20f * scale
+            textSize = titleTextSize
             typeface = Typeface.DEFAULT_BOLD
             isAntiAlias = true
         }
         
         val artistPaint = TextPaint().apply {
             color = secondaryTxtColor
-            textSize = 16f * scale
+            textSize = artistTextSize
             typeface = Typeface.DEFAULT
             isAntiAlias = true
         }
@@ -224,8 +256,7 @@ object ComposeToImage {
             .setEllipsize(android.text.TextUtils.TruncateAt.END)
             .build()
 
-        // Vertically align text block with cover art
-        val headerTextHeight = titleLayout.height + artistLayout.height + (2f * scale) // +2dp padding between title and artist
+        val headerTextHeight = titleLayout.height + artistLayout.height + (2f * scale)
         val headerCenterY = padding + coverArtSize / 2f
         val titleY = headerCenterY - headerTextHeight / 2f
         
@@ -236,64 +267,86 @@ object ComposeToImage {
         artistLayout.draw(canvas)
         canvas.restore()
 
-        // --- Footer Section ---
-        val logoBoxSize = 22f * scale
-        val logoIconSize = 16f * scale
-        val footerY = imageHeight - padding - logoBoxSize
-        
-        // Draw Logo Background Box
-        val logoBgPaint = Paint().apply {
-            color = secondaryTxtColor
-            isAntiAlias = true
-        }
-        val logoBoxRect = RectF(padding, footerY, padding + logoBoxSize, footerY + logoBoxSize)
-        // Since it's a circle in preview: .clip(RoundedCornerShape(50)) which is usually circle for square box
-        canvas.drawOval(logoBoxRect, logoBgPaint)
-        
-        // Draw Logo Icon
-        val rawLogo = context.getDrawable(R.drawable.convx_logo)?.toBitmap()
-        rawLogo?.let {
-            val logoPaint = Paint().apply {
-                // If background is gradient/blur, tint might be tricky. 
-                // Using bgColor for tint is safe for Solid, but for Gradient/Blur 
-                // we might want a color that contrasts with secondaryTxtColor.
-                // Let's use the 'bgColor' passed in which is likely the dominant color or selected color.
-                // Or for simplicity, use a generic dark/light depending on theme.
-                colorFilter = PorterDuffColorFilter(bgColor, PorterDuff.Mode.SRC_IN)
-                isAntiAlias = true
-            }
-            
-            // Center logo in box
-            val logoOffset = (logoBoxSize - logoIconSize) / 2f
-            val logoRect = RectF(
-                padding + logoOffset, 
-                footerY + logoOffset, 
-                padding + logoBoxSize - logoOffset, 
-                footerY + logoBoxSize - logoOffset
-            )
-            canvas.drawBitmap(it, null, logoRect, logoPaint)
-        }
-        
-        // Draw App Name
+        // --- Footer Section (Frosted Glass Pill) ---
+        val logoIconSize = 15f * scale
+        val pillPaddingH = 10f * scale
+        val pillPaddingV = 5f * scale
         val appName = context.getString(R.string.app_name)
+
         val appNamePaint = TextPaint().apply {
-            color = secondaryTxtColor
-            textSize = 14f * scale
+            color = mainTextColor
+            alpha = (255 * 0.88).toInt()
+            textSize = 12f * scale
             typeface = Typeface.DEFAULT_BOLD
             isAntiAlias = true
         }
-        
-        val appNameX = padding + logoBoxSize + (8f * scale)
-        // Center text vertically relative to logo box
-        val appNameY = footerY + logoBoxSize/2f - (appNamePaint.descent() + appNamePaint.ascent()) / 2f
+
+        val appNameWidth = appNamePaint.measureText(appName)
+        val pillWidth = pillPaddingH + logoIconSize + (6f * scale) + appNameWidth + pillPaddingH
+        val pillHeight = logoIconSize + (pillPaddingV * 2)
+        val footerY = imageHeight - padding - pillHeight
+
+        // Draw pill background
+        val pillRect = RectF(padding, footerY, padding + pillWidth, footerY + pillHeight)
+        val pillRadius = pillHeight / 2f
+        val pillBgPaint = Paint().apply {
+            color = mainTextColor
+            alpha = (255 * 0.09).toInt()
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(pillRect, pillRadius, pillRadius, pillBgPaint)
+
+        // Draw pill border
+        val pillBorderPaint = Paint().apply {
+            color = mainTextColor
+            alpha = (255 * 0.18).toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = 0.8f * scale
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(pillRect, pillRadius, pillRadius, pillBorderPaint)
+
+        // Draw Logo Icon inside pill
+        val rawLogo = context.getDrawable(R.drawable.convx_logo)?.toBitmap()
+        rawLogo?.let {
+            val logoPaint = Paint().apply {
+                isAntiAlias = true
+            }
+            val logoRect = RectF(
+                padding + pillPaddingH,
+                footerY + pillPaddingV,
+                padding + pillPaddingH + logoIconSize,
+                footerY + pillPaddingV + logoIconSize
+            )
+            val clipPath = Path().apply {
+                addOval(logoRect, Path.Direction.CW)
+            }
+            canvas.save()
+            canvas.clipPath(clipPath)
+            canvas.drawBitmap(it, null, logoRect, logoPaint)
+            canvas.restore()
+        }
+
+        // Draw App Name inside pill
+        val appNameX = padding + pillPaddingH + logoIconSize + (6f * scale)
+        val appNameY = footerY + pillHeight / 2f - (appNamePaint.descent() + appNamePaint.ascent()) / 2f
         canvas.drawText(appName, appNameX, appNameY, appNamePaint)
 
         // --- Lyrics Section ---
-        // Calculate available space
         val lyricsTop = padding + coverArtSize + headerBottomPadding
-        val lyricsBottom = footerY - (12f * scale) // Add some padding above footer
+        val lyricsBottom = footerY - (12f * scale)
         val lyricsHeight = lyricsBottom - lyricsTop
         val lyricsWidth = imageWidth - (padding * 2)
+
+        // Watermark quotation mark behind lyrics
+        val quotePaint = TextPaint().apply {
+            color = mainTextColor
+            alpha = (255 * 0.06).toInt()
+            textSize = (if (lineCount <= 3) 120f else 85f) * scale
+            typeface = Typeface.DEFAULT_BOLD
+            isAntiAlias = true
+        }
+        canvas.drawText("“", imageWidth - padding - (45f * scale), lyricsTop + (50f * scale), quotePaint)
 
         val lyricsPaint = TextPaint().apply {
             color = mainTextColor
@@ -302,17 +355,15 @@ object ComposeToImage {
             letterSpacing = 0.005f
         }
 
-        // Adaptive font size calculation
-        // Start with a large size (e.g. 50sp equivalent) and scale down until it fits
-        var lyricsTextSize = 50f * scale 
-        val minLyricsSize = 13f * scale 
+        var lyricsTextSize = dims.initialFontDp * scale * 1.5f
+        val minLyricsSize = dims.minFontDp * scale
         var lyricsLayout: StaticLayout
 
         while (lyricsTextSize > minLyricsSize) {
             lyricsPaint.textSize = lyricsTextSize
             lyricsLayout = StaticLayout.Builder.obtain(lyrics, 0, lyrics.length, lyricsPaint, lyricsWidth.toInt())
                 .setAlignment(lyricsAlignment)
-                .setLineSpacing(0f, 1.2f)
+                .setLineSpacing(0f, dims.lineSpacingMult)
                 .setIncludePad(false)
                 .build()
             
@@ -320,18 +371,16 @@ object ComposeToImage {
                 break
             }
             
-            lyricsTextSize -= 1f * scale // Decrease by ~1sp equivalent steps
+            lyricsTextSize -= 1f * scale
         }
         
-        // One final rebuild with the determined size
         lyricsPaint.textSize = lyricsTextSize
         lyricsLayout = StaticLayout.Builder.obtain(lyrics, 0, lyrics.length, lyricsPaint, lyricsWidth.toInt())
             .setAlignment(lyricsAlignment)
-            .setLineSpacing(0f, 1.2f)
+            .setLineSpacing(0f, dims.lineSpacingMult)
             .setIncludePad(false)
             .build()
 
-        // Center vertically in the available space
         val lyricsContentHeight = lyricsLayout.height
         val lyricsY = if (lyricsContentHeight < lyricsHeight) {
              lyricsTop + (lyricsHeight - lyricsContentHeight) / 2f

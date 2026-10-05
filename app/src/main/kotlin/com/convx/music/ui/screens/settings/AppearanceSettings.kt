@@ -108,6 +108,7 @@ import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.DensityScaleKey
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.DynamicThemeKey
+import com.convx.music.constants.ForceTabletLayoutKey
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.EnableSettingsPopupKey
@@ -262,7 +263,7 @@ fun AppearanceSettings(
 
     val (libraryIconsOnly, onLibraryIconsOnlyChange) = rememberPreference(
         LibraryIconsOnlyKey,
-        defaultValue = true
+        defaultValue = false
     )
 
     val (enableHighRefreshRate, onEnableHighRefreshRateChange) = rememberPreference(
@@ -275,6 +276,10 @@ fun AppearanceSettings(
     )
     val (enableSettingsPopup, onEnableSettingsPopupChange) = rememberPreference(
         EnableSettingsPopupKey,
+        defaultValue = false
+    )
+    val (forceTabletLayout, onForceTabletLayoutChange) = rememberPreference(
+        ForceTabletLayoutKey,
         defaultValue = false
     )
 
@@ -742,6 +747,29 @@ fun AppearanceSettings(
                             )
                         },
                         onClick = { onLibraryIconsOnlyChange(!libraryIconsOnly) }
+                    )
+                )
+                add(
+                    Material3SettingsItem(
+                        icon = painterResource(R.drawable.grid_view),
+                        title = { Text(stringResource(R.string.force_tablet_layout)) },
+                        description = { Text(stringResource(R.string.force_tablet_layout_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = forceTabletLayout,
+                                onCheckedChange = onForceTabletLayoutChange,
+                                thumbContent = {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = if (forceTabletLayout) R.drawable.check else R.drawable.close
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        onClick = { onForceTabletLayoutChange(!forceTabletLayout) }
                     )
                 )
             }

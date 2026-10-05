@@ -4,6 +4,7 @@
  */
 package com.convx.music.ui.screens.library
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,7 +37,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.convx.music.LocalPlayerAwareWindowInsets
 import com.convx.music.LocalPlayerConnection
+import com.convx.music.LocalTabView
 import com.convx.music.R
+import com.convx.music.ui.utils.bounceClick
 import com.convx.music.constants.LocalSongSortDescendingKey
 import com.convx.music.constants.LocalSongSortTypeKey
 import com.convx.music.constants.SongSortType
@@ -106,6 +110,8 @@ fun LocalSongsScreen(
     LaunchedEffect(Unit) { viewModel.scanDevice(context, force = false) }
 
     val lazyListState = rememberLazyListState()
+    val isTablet = LocalTabView.current
+    val songPairs = remember(sortedSongs) { sortedSongs.chunked(2) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -155,53 +161,163 @@ fun LocalSongsScreen(
                 }
             }
 
-            itemsIndexed(
-                items = sortedSongs,
-                key = { _, song -> song.id },
-                contentType = { _, _ -> "song" },
-            ) { index, song ->
-                SongListItem(
-                    song = song,
-                    isActive = song.id == mediaMetadata?.id,
-                    isPlaying = isPlaying,
-                    // On-device files carry neither a like state nor a download state.
-                    showLikedIcon = false,
-                    showDownloadIcon = false,
-                    shape = listItemShape(index, sortedSongs.size),
-                    trailingContent = {
-                        IconButton(
-                            onClick = {
-                                menuState.show {
-                                    SongMenu(
-                                        originalSong = song,
-                                        navController = navController,
-                                        onDismiss = menuState::dismiss,
-                                    )
-                                }
-                            },
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
+            if (isTablet) {
+                itemsIndexed(
+                    items = songPairs,
+                    key = { _, pair -> pair.first().id },
+                    contentType = { _, _ -> "song" },
+                ) { rowIndex, pair ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = AppleTokens.Gutter),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val song1 = pair[0]
+                        val index1 = rowIndex * 2
+                        Box(Modifier.weight(1f)) {
+                            SongListItem(
+                                song = song1,
+                                isActive = song1.id == mediaMetadata?.id,
+                                isPlaying = isPlaying,
+                                showLikedIcon = false,
+                                showDownloadIcon = false,
+                                shape = RoundedCornerShape(12.dp),
+                                trailingContent = {
+                                    IconButton(
+                                        onClick = {
+                                            menuState.show {
+                                                SongMenu(
+                                                    originalSong = song1,
+                                                    navController = navController,
+                                                    onDismiss = menuState::dismiss,
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.more_vert),
+                                            contentDescription = null,
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .bounceClick {
+                                        if (song1.id == mediaMetadata?.id) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            playerConnection.playQueue(
+                                                ListQueue(
+                                                    title = context.getString(R.string.songs),
+                                                    items = sortedSongs.map { it.toMediaItem() },
+                                                    startIndex = index1,
+                                                ),
+                                            )
+                                        }
+                                    },
                             )
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .bounceClick {
-                            if (song.id == mediaMetadata?.id) {
-                                playerConnection.togglePlayPause()
-                            } else {
-                                playerConnection.playQueue(
-                                    ListQueue(
-                                        title = context.getString(R.string.songs),
-                                        items = sortedSongs.map { it.toMediaItem() },
-                                        startIndex = index,
-                                    ),
+                        if (pair.size > 1) {
+                            val song2 = pair[1]
+                            val index2 = rowIndex * 2 + 1
+                            Box(Modifier.weight(1f)) {
+                                SongListItem(
+                                    song = song2,
+                                    isActive = song2.id == mediaMetadata?.id,
+                                    isPlaying = isPlaying,
+                                    showLikedIcon = false,
+                                    showDownloadIcon = false,
+                                    shape = RoundedCornerShape(12.dp),
+                                    trailingContent = {
+                                        IconButton(
+                                            onClick = {
+                                                menuState.show {
+                                                    SongMenu(
+                                                        originalSong = song2,
+                                                        navController = navController,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+                                            },
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.more_vert),
+                                                contentDescription = null,
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .bounceClick {
+                                            if (song2.id == mediaMetadata?.id) {
+                                                playerConnection.togglePlayPause()
+                                            } else {
+                                                playerConnection.playQueue(
+                                                    ListQueue(
+                                                        title = context.getString(R.string.songs),
+                                                        items = sortedSongs.map { it.toMediaItem() },
+                                                        startIndex = index2,
+                                                    ),
+                                                )
+                                            }
+                                        },
+                                )
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                itemsIndexed(
+                    items = sortedSongs,
+                    key = { _, song -> song.id },
+                    contentType = { _, _ -> "song" },
+                ) { index, song ->
+                    SongListItem(
+                        song = song,
+                        isActive = song.id == mediaMetadata?.id,
+                        isPlaying = isPlaying,
+                        // On-device files carry neither a like state nor a download state.
+                        showLikedIcon = false,
+                        showDownloadIcon = false,
+                        shape = listItemShape(index, sortedSongs.size),
+                        trailingContent = {
+                            IconButton(
+                                onClick = {
+                                    menuState.show {
+                                        SongMenu(
+                                            originalSong = song,
+                                            navController = navController,
+                                            onDismiss = menuState::dismiss,
+                                        )
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.more_vert),
+                                    contentDescription = null,
                                 )
                             }
                         },
-                )
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .bounceClick {
+                                if (song.id == mediaMetadata?.id) {
+                                    playerConnection.togglePlayPause()
+                                } else {
+                                    playerConnection.playQueue(
+                                        ListQueue(
+                                            title = context.getString(R.string.songs),
+                                            items = sortedSongs.map { it.toMediaItem() },
+                                            startIndex = index,
+                                        ),
+                                    )
+                                }
+                            },
+                    )
+                }
             }
         }
 
