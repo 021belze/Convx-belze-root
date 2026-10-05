@@ -265,19 +265,12 @@ fun LyricsImageCard(
         }
     }
 
+    // Main Card Container with rounded corners
     Box(
         modifier = Modifier
-            .background(Color(0xFF09090C))
-            .fillMaxSize(),
-        contentAlignment = Alignment.Center
+            .fillMaxSize()
+            .clip(RoundedCornerShape(cardCornerRadius))
     ) {
-        // Main Card Container with shadow and rounded corners
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(cardCornerRadius))
-                .shadow(16.dp, RoundedCornerShape(cardCornerRadius))
-        ) {
             // Background Layer
             when (backgroundStyle) {
                 LyricsBackgroundStyle.SOLID -> {
@@ -328,12 +321,6 @@ fun LyricsImageCard(
                     )
             )
             
-            // Specular border
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .border(1.dp, mainTextColor.copy(alpha = 0.12f), RoundedCornerShape(cardCornerRadius))
-            )
 
             // Content Column
             Column(
@@ -412,17 +399,6 @@ fun LyricsImageCard(
                         letterSpacing = 0.005.em,
                     )
 
-                    // Subtle quotation watermark behind lyrics
-                    Text(
-                        text = "“",
-                        fontSize = if (lineCount <= 3) 120.sp else 85.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = mainTextColor.copy(alpha = 0.06f),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(end = 2.dp)
-                            .offset(y = (-12).dp)
-                    )
 
                     val textMeasurer = rememberTextMeasurer()
                     val dynamicFontSize = rememberAdjustedFontSize(
@@ -481,6 +457,5 @@ fun LyricsImageCard(
                     }
                 }
             }
-        }
     }
 }

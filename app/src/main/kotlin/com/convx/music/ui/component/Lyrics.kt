@@ -2319,8 +2319,8 @@ fun Lyrics(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
-                            .padding(8.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(24.dp))
                     ) {
                         LyricsImageCard(
                             lyricText = lyricsText,

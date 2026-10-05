@@ -1,26 +1,27 @@
 {
-  "description": "Convx 1.5.3-beta-r12 delivers targeted visual refinements, landscape ergonomics optimizations, and critical layout engine stability fixes across lyrics sharing and search navigation.",
+  "description": "Convx 1.5.3 (Beta) delivers targeted visual refinements, spring animation enhancements, and refined layout geometry across lyrics sharing and search navigation.",
   "image": "",
   "changelog": [
     {
       "title": "Search & Liquid Glass Interface",
       "items": [
-        "Restored real-time liquid glass refraction, chromatic aberration, and spring physics for the category pill indicator on the Search screen.",
-        "Corrected visual layer composition to ensure the active indicator renders with full optical depth across all display scales."
+        "Restored full spring physics, inertia damping, and smooth slide animations for the category pill selector on the Search screen.",
+        "Maintained real-time liquid glass refraction and chromatic aberration depth across all display scales."
+      ]
+    },
+    {
+      "title": "Lyrics Sharing Visual Polish",
+      "items": [
+        "Removed background quotation mark watermark for a clean, minimalist typography presentation.",
+        "Eliminated outer card borders for a modern borderless aesthetic.",
+        "Perfected 24dp rounded corner curvature and removed dark corner artifacts in both the customization preview dialog and exported images."
       ]
     },
     {
       "title": "Lyrics & Player Ergonomics",
       "items": [
         "Optimized menu button hierarchy: the secondary track action menu is now reserved exclusively for landscape view, eliminating duplicate controls in vertical portrait mode.",
-        "Refined layout spacing and gesture response for full-screen lyrics viewing."
-      ]
-    },
-    {
-      "title": "Lyrics Sharing Stability",
-      "items": [
-        "Fixed a critical layout padding assertion error (IllegalArgumentException: Padding must be non-negative) during lyric quote card generation.",
-        "Enhanced constraint bounds handling to ensure robust social card exports on high-density devices and One UI configurations."
+        "Fixed layout padding assertions during lyric card rendering on high-density displays."
       ]
     },
     {

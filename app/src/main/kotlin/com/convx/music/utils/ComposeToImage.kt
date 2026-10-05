@@ -96,8 +96,18 @@ object ComposeToImage {
             } catch (_: Exception) {}
         }
 
-        // Draw Background
+        // Base scale on width relative to the reference design (340dp)
+        val scale = imageWidth / 340f
+        val cornerRadius = 24f * scale
+
+        // Draw Background clipped to rounded corners
         val backgroundRect = RectF(0f, 0f, imageWidth.toFloat(), imageHeight.toFloat())
+        val cardClipPath = Path().apply {
+            addRoundRect(backgroundRect, cornerRadius, cornerRadius, Path.Direction.CW)
+        }
+        canvas.save()
+        canvas.clipPath(cardClipPath)
+
         val backgroundPaint = Paint().apply {
             isAntiAlias = true
         }
@@ -158,11 +168,6 @@ object ComposeToImage {
                 }
             }
         }
-        
-        // Base scale on width relative to the reference design (340dp)
-        val scale = imageWidth / 340f
-        
-        val cornerRadius = 24f * scale
 
         // Draw bottom gradient scrim on canvas for contrast
         val scrimPaint = Paint().apply {
@@ -175,16 +180,6 @@ object ComposeToImage {
             isAntiAlias = true
         }
         canvas.drawRect(RectF(0f, imageHeight - (200f * scale), imageWidth.toFloat(), imageHeight.toFloat()), scrimPaint)
-
-        // Draw inner border
-        val borderPaint = Paint().apply {
-            color = mainTextColor
-            alpha = (255 * 0.12).toInt()
-            style = Paint.Style.STROKE
-            strokeWidth = 1f * scale
-            isAntiAlias = true
-        }
-        canvas.drawRoundRect(backgroundRect, cornerRadius, cornerRadius, borderPaint)
 
         // Calculate line count and adaptive dimensions
         val lineCount = lyrics.lines().filter { it.isNotBlank() }.size.coerceAtLeast(1)
@@ -338,15 +333,7 @@ object ComposeToImage {
         val lyricsHeight = lyricsBottom - lyricsTop
         val lyricsWidth = imageWidth - (padding * 2)
 
-        // Watermark quotation mark behind lyrics
-        val quotePaint = TextPaint().apply {
-            color = mainTextColor
-            alpha = (255 * 0.06).toInt()
-            textSize = (if (lineCount <= 3) 120f else 85f) * scale
-            typeface = Typeface.DEFAULT_BOLD
-            isAntiAlias = true
-        }
-        canvas.drawText("“", imageWidth - padding - (45f * scale), lyricsTop + (50f * scale), quotePaint)
+
 
         val lyricsPaint = TextPaint().apply {
             color = mainTextColor
@@ -391,6 +378,8 @@ object ComposeToImage {
         canvas.save()
         canvas.translate(padding, lyricsY)
         lyricsLayout.draw(canvas)
+        canvas.restore()
+
         canvas.restore()
 
         return@withContext bitmap
