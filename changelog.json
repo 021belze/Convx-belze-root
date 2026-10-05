@@ -1,40 +1,33 @@
 {
-  "description": "Convx 1.5.3 (Beta) introduces a reimagined Wrapped experience with interactive story cards, an adaptive editorial redesign for lyrics sharing, a refined tablet navigation architecture, and extensive performance enhancements across the entire audio pipeline.",
+  "description": "Convx 1.5.3-beta-r12 delivers targeted visual refinements, landscape ergonomics optimizations, and critical layout engine stability fixes across lyrics sharing and search navigation.",
   "image": "",
   "changelog": [
     {
-      "title": "Editorial Lyrics Sharing",
+      "title": "Search & Liquid Glass Interface",
       "items": [
-        "Brand-new adaptive typography engine that dynamically balances single-line punchlines and multi-stanza quotes.",
-        "Refined visual hierarchy featuring responsive album artwork scaling, subtle watermark typography, and frosted glass branding pills.",
-        "High-fidelity image export engine optimized for social sharing with zero layout distortion."
+        "Restored real-time liquid glass refraction, chromatic aberration, and spring physics for the category pill indicator on the Search screen.",
+        "Corrected visual layer composition to ensure the active indicator renders with full optical depth across all display scales."
       ]
     },
     {
-      "title": "Wrapped Stories Experience",
+      "title": "Lyrics & Player Ergonomics",
       "items": [
-        "Instagram and Spotify-style segmented story progress bars with auto-advancing visual chapters.",
-        "Interactive tap navigation: tap the right edge to advance, left edge to rewind, or touch and hold to pause.",
-        "Seamless YouTube Music account integration badge confirming your connected streaming identity.",
-        "Smart all-time playback fallback ensures your Wrapped renders rich insights even when recent history is limited.",
-        "Completely refreshed visuals for Top Songs, Top Artists, and final Year-in-Review recap summaries."
+        "Optimized menu button hierarchy: the secondary track action menu is now reserved exclusively for landscape view, eliminating duplicate controls in vertical portrait mode.",
+        "Refined layout spacing and gesture response for full-screen lyrics viewing."
       ]
     },
     {
-      "title": "Adaptive Tablet & Large Screen Ergonomics",
+      "title": "Lyrics Sharing Stability",
       "items": [
-        "Floating navigation sidebar upgraded with physics-based spring transitions and staggered label choreography.",
-        "Landscape and tablet lyrics experience now includes full access to the track action menu.",
-        "Responsive hero layouts across Artist and Album pages eliminate component overlap on wide screens."
+        "Fixed a critical layout padding assertion error (IllegalArgumentException: Padding must be non-negative) during lyric quote card generation.",
+        "Enhanced constraint bounds handling to ensure robust social card exports on high-density devices and One UI configurations."
       ]
     },
     {
-      "title": "Library, Search & Visual Polish",
+      "title": "Performance & Architecture",
       "items": [
-        "Resolved Search screen category pill touch interception for instant, effortless filtering.",
-        "Restored and expanded full support for Cached and Uploaded playlists in your Library.",
-        "Eliminated color flashing on page transitions with seamless dynamic hero background crossfading.",
-        "Dynamic contextual contrast for lyric provider attributions in light and dark themes."
+        "Preserved high-speed direct CDN asset distribution for rapid in-app beta updates.",
+        "Ongoing performance improvements for low-latency audio playback and backdrop rendering."
       ]
     }
   ]

@@ -97,9 +97,12 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -793,46 +796,50 @@ fun Lyrics(
                 }
             }
 
-            // 3-dot menu button (ensures tablet and landscape modes always have access to lyrics options)
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .clickable {
-                        menuState.show {
-                            com.convx.music.ui.menu.LyricsMenu(
-                                lyricsProvider = { lyricsEntity },
-                                songProvider = { currentSong?.song },
-                                mediaMetadataProvider = {
-                                    currentSong?.toMediaMetadata() ?: com.convx.music.models.MediaMetadata(
-                                        id = "",
-                                        title = "",
-                                        artists = emptyList(),
-                                        duration = 0
-                                    )
-                                },
-                                onDismiss = menuState::dismiss,
-                                onShowOffsetDialog = {
-                                    bottomSheetPageState.show {
-                                        com.convx.music.ui.utils.ShowOffsetDialog(
-                                            songProvider = { currentSong?.song }
+            // 3-dot menu button: shown ONLY in landscape mode so portrait/vertical mode does not have duplicate buttons
+            val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            if (isLandscape) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .clickable {
+                            menuState.show {
+                                com.convx.music.ui.menu.LyricsMenu(
+                                    lyricsProvider = { lyricsEntity },
+                                    songProvider = { currentSong?.song },
+                                    mediaMetadataProvider = {
+                                        currentSong?.toMediaMetadata() ?: com.convx.music.models.MediaMetadata(
+                                            id = "",
+                                            title = "",
+                                            artists = emptyList(),
+                                            duration = 0
                                         )
+                                    },
+                                    onDismiss = menuState::dismiss,
+                                    onShowOffsetDialog = {
+                                        bottomSheetPageState.show {
+                                            com.convx.music.ui.utils.ShowOffsetDialog(
+                                                songProvider = { currentSong?.song }
+                                            )
+                                        }
                                     }
-                                }
-                            )
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.more_vert),
-                    contentDescription = stringResource(R.string.lyrics),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
+                                )
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.more_vert),
+                        contentDescription = stringResource(R.string.lyrics),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
+
 
         // Status UI for translation
         Box(

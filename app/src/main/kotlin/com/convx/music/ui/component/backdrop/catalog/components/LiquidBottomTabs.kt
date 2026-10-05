@@ -41,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -244,7 +243,6 @@ fun LiquidBottomTabs(
 
         Box(
             Modifier
-                .zIndex(-1f)
                 .padding(horizontal = 4f.dp)
                 .graphicsLayer {
                     translationX =

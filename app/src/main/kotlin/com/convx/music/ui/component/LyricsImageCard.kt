@@ -18,11 +18,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -418,20 +420,22 @@ fun LyricsImageCard(
                         color = mainTextColor.copy(alpha = 0.06f),
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(end = 2.dp, top = (-12).dp)
+                            .padding(end = 2.dp)
+                            .offset(y = (-12).dp)
                     )
 
                     val textMeasurer = rememberTextMeasurer()
                     val dynamicFontSize = rememberAdjustedFontSize(
                         text = lyricText,
-                        maxWidth = availableWidth - 8.dp,
-                        maxHeight = availableHeight - 8.dp,
+                        maxWidth = (availableWidth - 8.dp).coerceAtLeast(1.dp),
+                        maxHeight = (availableHeight - 8.dp).coerceAtLeast(1.dp),
                         density = density,
                         initialFontSize = dims.initialFontSize,
                         minFontSize = dims.minFontSize,
                         style = textStyle,
                         textMeasurer = textMeasurer
                     )
+
 
                     Text(
                         text = lyricText,
