@@ -10,6 +10,9 @@ on:
       - '.github/**/*.md'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build_beta:
     name: Build Universal GMS Beta
@@ -42,8 +45,37 @@ jobs:
         run: |
           ./gradlew assembleUniversalGmsDebug -Pnightly=true -PnightlyRun=${{ github.run_number }} --no-configuration-cache --console=plain --warning-mode summary -x lint
 
-      - name: Upload Beta APK
+      - name: Upload Beta Artifact
         uses: actions/upload-artifact@v4
         with:
           name: convx-gms-beta
           path: app/build/outputs/apk/universalGms/debug/*.apk
+
+      - name: Publish Beta Pre-Release to GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION_MAJOR=$(grep "VERSION_MAJOR=" version.properties | cut -d'=' -f2 | tr -d '\r\n ')
+          VERSION_MINOR=$(grep "VERSION_MINOR=" version.properties | cut -d'=' -f2 | tr -d '\r\n ')
+          VERSION_PATCH=$(grep "VERSION_PATCH=" version.properties | cut -d'=' -f2 | tr -d '\r\n ')
+          VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
+          TAG="v${VERSION}-beta-r${{ github.run_number }}"
+          
+          APK_SRC=$(find app/build/outputs/apk/universalGms/debug -name '*.apk' | head -n 1)
+          if [ -n "$APK_SRC" ] && [ -f "$APK_SRC" ]; then
+            APK_DEST="convx-v${VERSION}-universal-beta-r${{ github.run_number }}.apk"
+            cp "$APK_SRC" "$APK_DEST"
+
+            TITLE="Convx v${VERSION} Beta (r${{ github.run_number }})"
+            NOTES="Automated high-speed Beta pre-release build from branch beta (run #${{ github.run_number }})."
+            
+            gh release create "$TAG" "$APK_DEST" changelog.json \
+              --repo "${{ github.repository }}" \
+              --title "$TITLE" \
+              --notes "$NOTES" \
+              --prerelease
+          else
+            echo "Error: APK not found in app/build/outputs/apk/universalGms/debug"
+            exit 1
+          fi
+
