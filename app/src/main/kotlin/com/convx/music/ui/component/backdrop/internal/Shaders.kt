@@ -49,7 +49,10 @@ float sdRoundedRect(float2 coord, float2 halfSize, float radius) {
 float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {
     float2 cornerCoord = abs(coord) - (halfSize - float2(radius));
     if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {
-        return sign(coord) * normalize(max(cornerCoord, 0.0));
+        float2 m = max(cornerCoord, 0.0);
+        float mLen = length(m);
+        float2 norm = mLen > 0.001 ? (m / mLen) : float2(0.0, 0.0);
+        return sign(coord) * norm;
     } else {
         float gradX = step(cornerCoord.y, cornerCoord.x);
         return sign(coord) * float2(gradX, 1.0 - gradX);
@@ -76,17 +79,28 @@ float circleMap(float x) {
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
+    
+    // Prevent refraction wave from reaching center (0,0) which causes a seam/split discontinuity
+    float maxSafeHeight = max(min(halfSize.x, halfSize.y) * 0.45, 1.0);
+    float safeRefractionHeight = min(refractionHeight, maxSafeHeight);
     
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
-    if (-sd >= refractionHeight) {
+    if (-sd >= safeRefractionHeight) {
         return content.eval(coord);
     }
     sd = min(sd, 0.0);
     
-    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;
+    float ratio = clamp(-sd / safeRefractionHeight, 0.0, 1.0);
+    float d = circleMap(1.0 - ratio) * refractionAmount;
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
-    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));
+    
+    float centerDist = length(centeredCoord);
+    float2 safeCenterDir = centerDist > 0.001 ? (centeredCoord / centerDist) : float2(0.0, 0.0);
+    float2 gradBase = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);
+    float2 gradCombined = gradBase + depthEffect * safeCenterDir;
+    float gradLen = length(gradCombined);
+    float2 grad = gradLen > 0.001 ? (gradCombined / gradLen) : float2(0.0, 0.0);
     
     float2 refractedCoord = coord + d * grad;
     return content.eval(refractedCoord);
@@ -113,20 +127,32 @@ float circleMap(float x) {
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
+    
+    // Prevent refraction wave from reaching center (0,0) which causes a seam/split discontinuity
+    float maxSafeHeight = max(min(halfSize.x, halfSize.y) * 0.45, 1.0);
+    float safeRefractionHeight = min(refractionHeight, maxSafeHeight);
     
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
-    if (-sd >= refractionHeight) {
+    if (-sd >= safeRefractionHeight) {
         return content.eval(coord);
     }
     sd = min(sd, 0.0);
     
-    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;
+    float ratio = clamp(-sd / safeRefractionHeight, 0.0, 1.0);
+    float d = circleMap(1.0 - ratio) * refractionAmount;
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
-    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));
+    
+    float centerDist = length(centeredCoord);
+    float2 safeCenterDir = centerDist > 0.001 ? (centeredCoord / centerDist) : float2(0.0, 0.0);
+    float2 gradBase = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);
+    float2 gradCombined = gradBase + depthEffect * safeCenterDir;
+    float gradLen = length(gradCombined);
+    float2 grad = gradLen > 0.001 ? (gradCombined / gradLen) : float2(0.0, 0.0);
     
     float2 refractedCoord = coord + d * grad;
-    float dispersionIntensity = chromaticAberration * ((centeredCoord.x * centeredCoord.y) / (halfSize.x * halfSize.y));
+    float denom = max(halfSize.x * halfSize.y, 1.0);
+    float dispersionIntensity = chromaticAberration * ((centeredCoord.x * centeredCoord.y) / denom);
     float2 dispersedCoord = d * grad * dispersionIntensity;
     
     half4 color = half4(0.0);
@@ -179,7 +205,7 @@ $RoundedRectSDF
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = coord - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
     
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
     float2 grad = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);
@@ -201,7 +227,7 @@ $RoundedRectSDF
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = coord - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
     
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
     float2 grad = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);

@@ -640,10 +640,8 @@ fun GlassEffectSettings(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
                 Text(text = stringResource(R.string.liquid_glass_lens_height), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
                 Text(text = "%.2f".format(tempValue), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 16.dp))
-                // Range runs past 1.0: 1.0 is the old maximum (LENS_MAX_DP), and the
-                // glass could not be pushed any thicker than that no matter how far
-                // the slider went. Values above 1 scale beyond it.
-                Slider(value = tempValue, onValueChange = { tempValue = it }, valueRange = 0f..2f, modifier = Modifier.fillMaxWidth())
+                // Tuned to 0f..1.5f for responsive adjustment while shader clamps safely
+                Slider(value = tempValue, onValueChange = { tempValue = it }, valueRange = 0f..1.5f, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -662,8 +660,7 @@ fun GlassEffectSettings(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
                 Text(text = stringResource(R.string.liquid_glass_lens_amount), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
                 Text(text = "%.2f".format(tempValue), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 16.dp))
-                // See the lens-height dialog above for why this runs to 2.
-                Slider(value = tempValue, onValueChange = { tempValue = it }, valueRange = 0f..2f, modifier = Modifier.fillMaxWidth())
+                Slider(value = tempValue, onValueChange = { tempValue = it }, valueRange = 0f..1.5f, modifier = Modifier.fillMaxWidth())
             }
         }
     }

@@ -436,7 +436,7 @@ fun Thumbnail(
 
         // Main thumbnail view
         AnimatedVisibility(
-            visible = error == null && !(playerBackground == PlayerBackgroundStyle.APPLE_MUSIC && !isLandscape),
+            visible = error == null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier

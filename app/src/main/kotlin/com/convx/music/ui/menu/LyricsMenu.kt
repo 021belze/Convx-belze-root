@@ -474,9 +474,8 @@ fun LyricsMenu(
         item {
             Material3MenuGroup(
                 items = buildList {
-                    // Add "Translate with AI" option if API key is configured
-                    if (hasApiKey) {
-                        add(
+                    // Lyrics translation option (uses Google Translate when no AI API key is configured)
+                    add(
                             Material3MenuItemData(
                                 title = { Text(stringResource(R.string.ai_lyrics_translation)) },
                                 icon = {
@@ -523,7 +522,7 @@ fun LyricsMenu(
                                 },
                             )
                         )
-                    }
+                    
                     
                     add(
                         Material3MenuItemData(

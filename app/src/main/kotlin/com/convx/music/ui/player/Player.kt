@@ -2215,10 +2215,7 @@ fun BottomSheetPlayer(
                         if (showInlineLyrics) {
                             FilledIconButton(
                                 onClick = {
-                                    if (!hasAiApiKey) {
-                                        navController.navigate("settings/ai")
-                                        Toast.makeText(context, context.getString(R.string.ai_api_key_required), Toast.LENGTH_SHORT).show()
-                                    } else if (hasActiveTranslations) {
+                                    if (hasActiveTranslations) {
                                         currentLyrics?.let { lyrics ->
                                             val cleared = LyricsTranslationHelper.clearTranslations(lyrics)
                                             database.query { upsert(cleared) }
@@ -2324,6 +2321,66 @@ fun BottomSheetPlayer(
                         LocalAppBackdrop provides playerBackdrop,
                         LocalBackdropLoopBucket provides if (videoCanvasActive) loopBucketProvider else null,
                     ) {
+                    if (!showInlineLyrics) {
+                        GlassCircleButton(
+                            onClick = {
+                                mediaMetadata.let { meta ->
+                                    when (download?.state) {
+                                        Download.STATE_COMPLETED, Download.STATE_QUEUED, Download.STATE_DOWNLOADING -> {
+                                            DownloadService.sendRemoveDownload(
+                                                context,
+                                                ExoDownloadService::class.java,
+                                                meta.id,
+                                                false,
+                                            )
+                                        }
+                                        else -> {
+                                            database.transaction {
+                                                insert(meta)
+                                            }
+                                            val downloadRequest =
+                                                DownloadRequest
+                                                    .Builder(meta.id, meta.id.toUri())
+                                                    .setCustomCacheKey(meta.id)
+                                                    .setData(meta.title.toByteArray())
+                                                    .build()
+                                            DownloadService.sendAddDownload(
+                                                context,
+                                                ExoDownloadService::class.java,
+                                                downloadRequest,
+                                                false,
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                        ) {
+                            when (download?.state) {
+                                Download.STATE_COMPLETED -> {
+                                    Icon(
+                                        painter = painterResource(R.drawable.offline),
+                                        contentDescription = null,
+                                        tint = LocalContentColor.current,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Download.STATE_QUEUED, Download.STATE_DOWNLOADING -> {
+                                    CircularWavyProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                }
+                                else -> {
+                                    Icon(
+                                        painter = painterResource(R.drawable.download),
+                                        contentDescription = null,
+                                        tint = LocalContentColor.current,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.size(12.dp))
+                    }
                     AnimatedContent(targetState = showInlineLyrics, label = "DownloadButton") { showLyrics ->
                         if (showLyrics) {
                             GlassCircleButton(
@@ -2372,10 +2429,7 @@ fun BottomSheetPlayer(
                         Spacer(modifier = Modifier.size(12.dp))
                         GlassCircleButton(
                             onClick = {
-                                if (!hasAiApiKey) {
-                                    navController.navigate("settings/ai")
-                                    Toast.makeText(context, context.getString(R.string.ai_api_key_required), Toast.LENGTH_SHORT).show()
-                                } else if (hasActiveTranslations) {
+                                if (hasActiveTranslations) {
                                     currentLyrics?.let { lyrics ->
                                         val cleared = LyricsTranslationHelper.clearTranslations(lyrics)
                                         database.query { upsert(cleared) }
@@ -3008,26 +3062,6 @@ fun BottomSheetPlayer(
                                 .fillMaxWidth()
                                 .padding(horizontal = PlayerHorizontalPadding),
                         ) {
-//                            Box(modifier = Modifier.weight(1f)) {
-//                                ResizableIconButton(
-//                                    icon = when (repeatMode) {
-//                                        Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL -> R.drawable.repeat
-//                                        Player.REPEAT_MODE_ONE -> R.drawable.repeat_one
-//                                        else -> throw IllegalStateException()
-//                                    },
-//                                    color = TextBackgroundColor,
-//                                    modifier = Modifier
-//                                        .size(32.dp)
-//                                        .padding(4.dp)
-//                                        .align(Alignment.Center)
-//                                        .alpha(if (isListenTogetherGuest) 0.5f else 1f),
-//                                    enabled = !isListenTogetherGuest,
-//                                    onClick = {
-//                                        playerConnection.player.toggleRepeatMode()
-//                                    }
-//                                )
-//                            }
-
                             Box(modifier = Modifier.weight(1f)) {
                                 ResizableIconButton(
                                     slot = PlayerIconSlot.PREVIOUS,
@@ -3035,15 +3069,13 @@ fun BottomSheetPlayer(
                                     enabled = canSkipPrevious && !isListenTogetherGuest,
                                     color = TextBackgroundColor,
                                     modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .align(Alignment.Center)
-                                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                                    Modifier
+                                        .size(48.dp)
+                                        .align(Alignment.Center)
+                                        .alpha(if (isListenTogetherGuest) 0.5f else 1f),
                                     onClick = playerConnection::seekToPrevious,
                                 )
                             }
-
-                            Spacer(Modifier.width(8.dp))
 
                             Box(
                                 modifier =
@@ -3093,8 +3125,6 @@ fun BottomSheetPlayer(
                                 )
                             }
 
-                            Spacer(Modifier.width(8.dp))
-
                             Box(modifier = Modifier.weight(1f)) {
                                 ResizableIconButton(
                                     slot = PlayerIconSlot.NEXT,
@@ -3102,26 +3132,13 @@ fun BottomSheetPlayer(
                                     enabled = canSkipNext && !isListenTogetherGuest,
                                     color = TextBackgroundColor,
                                     modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .align(Alignment.Center)
-                                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                                    Modifier
+                                        .size(48.dp)
+                                        .align(Alignment.Center)
+                                        .alpha(if (isListenTogetherGuest) 0.5f else 1f),
                                     onClick = playerConnection::seekToNext,
                                 )
                             }
-
-//                            Box(modifier = Modifier.weight(1f)) {
-//                                ResizableIconButton(
-//                                    icon = if (currentSong?.song?.liked == true) R.drawable.favorite else R.drawable.favorite_border,
-//                                    color = if (currentSong?.song?.liked == true) MaterialTheme.colorScheme.error else TextBackgroundColor,
-//                                    modifier =
-//                                    Modifier
-//                                        .size(32.dp)
-//                                        .padding(4.dp)
-//                                        .align(Alignment.Center),
-//                                    onClick = playerConnection::toggleLike,
-//                                )
-//                            }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp)) //space between play and audio

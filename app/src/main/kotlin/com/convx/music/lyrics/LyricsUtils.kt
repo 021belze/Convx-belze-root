@@ -146,6 +146,74 @@ object LyricsUtils {
         "੫" to "5", "੬" to "6", "੭" to "7", "੮" to "8", "੯" to "9"
     )
 
+    private val GREEK_ROMAJI_MAP: Map<String, String> = mapOf(
+        // Diphthongs and digraph combinations
+        "αι" to "ai", "αί" to "ai", "Αι" to "Ai", "ΑΙ" to "AI",
+        "ει" to "ei", "εί" to "ei", "Ει" to "Ei", "ΕΙ" to "EI",
+        "οι" to "oi", "οί" to "oi", "Οι" to "Oi", "ΟΙ" to "OI",
+        "ου" to "ou", "ού" to "ou", "Ου" to "Ou", "ΟΥ" to "OU",
+        "υι" to "yi", "υί" to "yi", "Υι" to "Yi", "ΥΙ" to "YI",
+        "μπ" to "b", "Μπ" to "B", "ΜΠ" to "B",
+        "ντ" to "d", "Ντ" to "D", "ΝΤ" to "D",
+        "γκ" to "g", "Γκ" to "G", "ΓΚ" to "G",
+        "γγ" to "ng", "Γγ" to "Ng", "ΓΓ" to "NG",
+        "τζ" to "tz", "Τζ" to "Tz", "ΤΖ" to "TZ",
+        "τσ" to "ts", "Τσ" to "Ts", "ΤΣ" to "TS",
+        "αυ" to "av", "αύ" to "av", "Αυ" to "Av", "ΑΥ" to "AV",
+        "ευ" to "ev", "εύ" to "ev", "Ευ" to "Ev", "ΕΥ" to "EV",
+        "ηυ" to "iv", "ηύ" to "iv", "Ηυ" to "Iv", "ΗΥ" to "IV",
+        // Single characters lowercase
+        "α" to "a", "ά" to "a",
+        "β" to "v",
+        "γ" to "g",
+        "δ" to "d",
+        "ε" to "e", "έ" to "e",
+        "ζ" to "z",
+        "η" to "i", "ή" to "i",
+        "θ" to "th",
+        "ι" to "i", "ί" to "i", "ϊ" to "i", "ΐ" to "i",
+        "κ" to "k",
+        "λ" to "l",
+        "μ" to "m",
+        "ν" to "n",
+        "ξ" to "x",
+        "ο" to "o", "ό" to "o",
+        "π" to "p",
+        "ρ" to "r",
+        "σ" to "s", "ς" to "s",
+        "τ" to "t",
+        "υ" to "y", "ύ" to "y", "ϋ" to "y", "ΰ" to "y",
+        "φ" to "f",
+        "χ" to "ch",
+        "ψ" to "ps",
+        "ω" to "o", "ώ" to "o",
+        // Single characters uppercase
+        "Α" to "A", "Ά" to "A",
+        "Β" to "V",
+        "Γ" to "G",
+        "Δ" to "D",
+        "Ε" to "E", "Έ" to "E",
+        "Ζ" to "Z",
+        "Η" to "I", "Ή" to "I",
+        "Θ" to "Th",
+        "Ι" to "I", "Ί" to "I", "Ϊ" to "I",
+        "Κ" to "K",
+        "Λ" to "L",
+        "Μ" to "M",
+        "Ν" to "N",
+        "Ξ" to "X",
+        "Ο" to "O", "Ό" to "O",
+        "Π" to "P",
+        "Ρ" to "R",
+        "Σ" to "S",
+        "Τ" to "T",
+        "Υ" to "Y", "Ύ" to "Y", "Ϋ" to "Y",
+        "Φ" to "F",
+        "Χ" to "Ch",
+        "Ψ" to "Ps",
+        "Ω" to "O", "Ώ" to "O"
+    )
+
     private val GENERAL_CYRILLIC_ROMAJI_MAP: Map<String, String> = mapOf(
         "А" to "A", "Б" to "B", "В" to "V", "Г" to "G", "Ґ" to "G", "Д" to "D",
         "Ѓ" to "Ǵ", "Ђ" to "Đ", "Е" to "E", "Ё" to "Yo", "Є" to "Ye", "Ж" to "Zh",
@@ -1222,6 +1290,37 @@ object LyricsUtils {
                 val str = char.toString()
                 sb.append(GURMUKHI_ROMAJI_MAP[str] ?: str)
                 i++
+            }
+        }
+        sb.toString()
+    }
+
+    fun isGreek(text: String): Boolean {
+        return text.any { char ->
+            (char in '\u0370'..'\u03FF') || (char in '\u1F00'..'\u1FFF')
+        }
+    }
+
+    suspend fun romanizeGreek(text: String): String = withContext(Dispatchers.Default) {
+        val sb = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            var consumed = false
+            // Check for 2-character sequence (diphthong/digraph)
+            if (i + 1 < text.length) {
+                val twoCharCandidate = text.substring(i, i + 2)
+                val mappedTwoChar = GREEK_ROMAJI_MAP[twoCharCandidate]
+                if (mappedTwoChar != null) {
+                    sb.append(mappedTwoChar)
+                    i += 2
+                    consumed = true
+                }
+            }
+
+            if (!consumed) {
+                val charStr = text[i].toString()
+                sb.append(GREEK_ROMAJI_MAP[charStr] ?: charStr)
+                i += 1
             }
         }
         sb.toString()

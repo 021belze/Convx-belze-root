@@ -6,6 +6,7 @@
 package com.convx.music.lyrics
 
 import android.content.Context
+import com.convx.music.api.GoogleTranslateService
 import com.convx.music.api.DeepLService
 import com.convx.music.api.MistralService
 import com.convx.music.api.OpenRouterService
@@ -240,10 +241,7 @@ object LyricsTranslationHelper {
             try {
                 // Validate inputs
                 val effectiveApiKey = if (provider == "DeepL") deeplApiKey else apiKey
-                if (effectiveApiKey.isBlank()) {
-                    _status.value = TranslationStatus.Error(context.getString(com.convx.music.R.string.ai_error_api_key_required))
-                    return@launch
-                }
+                val useGoogleTranslate = effectiveApiKey.isBlank() || provider == "GoogleTranslate"
 
                 if (lyrics.isEmpty()) {
                     _status.value = TranslationStatus.Error(context.getString(com.convx.music.R.string.ai_error_no_lyrics))
@@ -318,7 +316,13 @@ object LyricsTranslationHelper {
                     } catch (e: Exception) { null }
                     ?: targetLanguage
 
-                val result = if (provider == "DeepL") {
+                val result = if (useGoogleTranslate) {
+                    Timber.d("Using Google Translate (Free) for translation")
+                    GoogleTranslateService.translate(
+                        text = fullText,
+                        targetLanguage = targetLanguage,
+                    )
+                } else if (provider == "DeepL") {
                     Timber.d("Using DeepL for translation")
                     DeepLService.translate(
                         text = fullText,

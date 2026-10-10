@@ -143,6 +143,7 @@ import com.convx.music.constants.LyricsRomanizeChineseKey
 import com.convx.music.constants.LyricsRomanizeCyrillicByLineKey
 import com.convx.music.constants.LyricsRomanizeHindiKey
 import com.convx.music.constants.LyricsRomanizePunjabiKey
+import com.convx.music.constants.LyricsRomanizeGreekKey
 import com.convx.music.constants.LyricsRomanizeJapaneseKey
 import com.convx.music.constants.LyricsRomanizeKoreanKey
 import com.convx.music.constants.LyricsRomanizeKyrgyzKey
@@ -175,6 +176,7 @@ import com.convx.music.lyrics.LyricsUtils.isBulgarian
 import com.convx.music.lyrics.LyricsUtils.isChinese
 import com.convx.music.lyrics.LyricsUtils.isHindi
 import com.convx.music.lyrics.LyricsUtils.isPunjabi
+import com.convx.music.lyrics.LyricsUtils.isGreek
 import com.convx.music.lyrics.LyricsUtils.isJapanese
 import com.convx.music.lyrics.LyricsUtils.isKorean
 import com.convx.music.lyrics.LyricsUtils.isKyrgyz
@@ -187,6 +189,7 @@ import com.convx.music.lyrics.LyricsUtils.parseLyrics
 import com.convx.music.lyrics.LyricsUtils.romanizeChinese
 import com.convx.music.lyrics.LyricsUtils.romanizeHindi
 import com.convx.music.lyrics.LyricsUtils.romanizePunjabi
+import com.convx.music.lyrics.LyricsUtils.romanizeGreek
 import com.convx.music.lyrics.LyricsUtils.romanizeCyrillic
 import com.convx.music.lyrics.LyricsUtils.romanizeJapanese
 import com.convx.music.lyrics.LyricsUtils.romanizeKorean
@@ -241,6 +244,7 @@ fun Lyrics(
     val romanizeChineseLyrics by rememberPreference(LyricsRomanizeChineseKey, true)
     val romanizeHindiLyrics by rememberPreference(LyricsRomanizeHindiKey, true)
     val romanizePunjabiLyrics by rememberPreference(LyricsRomanizePunjabiKey, true)
+    val romanizeGreekLyrics by rememberPreference(LyricsRomanizeGreekKey, true)
     val lyricsGlowEffect by rememberPreference(LyricsGlowEffectKey, true)
     val lyricsAnimationStyle by rememberEnumPreference(LyricsAnimationStyleKey, LyricsAnimationStyle.APPLE)
     val lyricsTextSize by rememberPreference(LyricsTextSizeKey, 30f)
@@ -296,6 +300,7 @@ fun Lyrics(
             val hasCyrillic = lyrics.any { it in '\u0400'..'\u04FF' }
             val hasCjk = lyrics.any { it in '\u4E00'..'\u9FFF' || it in '\u3040'..'\u30FF' || it in '\uAC00'..'\uD7AF' }
             val hasIndic = lyrics.any { it in '\u0900'..'\u097F' || it in '\u0A00'..'\u0A7F' }
+            val hasGreek = lyrics.any { (it in '\u0370'..'\u03FF') || (it in '\u1F00'..'\u1FFF') }
 
             val isRussianLyrics = hasCyrillic && romanizeRussianLyrics && !romanizeCyrillicByLine && isRussian(lyrics)
             val isUkrainianLyrics = hasCyrillic && romanizeUkrainianLyrics && !romanizeCyrillicByLine && isUkrainian(lyrics)
@@ -370,6 +375,12 @@ fun Lyrics(
                     }
                 }
 
+                if (hasGreek && romanizeGreekLyrics && isGreek(entry.text)) {
+                    scope.launch(Dispatchers.Default) {
+                        newEntry.romanizedTextFlow.value = romanizeGreek(entry.text)
+                    }
+                }
+
                 newEntry
             }.let {
                 listOf(LyricsEntry.HEAD_LYRICS_ENTRY) + it
@@ -378,6 +389,7 @@ fun Lyrics(
             val hasCyrillic = lyrics.any { it in '\u0400'..'\u04FF' }
             val hasCjk = lyrics.any { it in '\u4E00'..'\u9FFF' || it in '\u3040'..'\u30FF' || it in '\uAC00'..'\uD7AF' }
             val hasIndic = lyrics.any { it in '\u0900'..'\u097F' || it in '\u0A00'..'\u0A7F' }
+            val hasGreek = lyrics.any { (it in '\u0370'..'\u03FF') || (it in '\u1F00'..'\u1FFF') }
 
             val isRussianLyrics = hasCyrillic && romanizeRussianLyrics && !romanizeCyrillicByLine && isRussian(lyrics)
             val isUkrainianLyrics = hasCyrillic && romanizeUkrainianLyrics && !romanizeCyrillicByLine && isUkrainian(lyrics)
@@ -452,6 +464,12 @@ fun Lyrics(
                     }
                 }
 
+                if (hasGreek && romanizeGreekLyrics && isGreek(line)) {
+                    scope.launch(Dispatchers.Default) {
+                        newEntry.romanizedTextFlow.value = romanizeGreek(line)
+                    }
+                }
+
                 newEntry
             }
         }
@@ -520,8 +538,7 @@ fun Lyrics(
     // Listen for manual trigger
     LaunchedEffect(showLyrics, lines.size) {
         LyricsTranslationHelper.manualTrigger.collect {
-            val effectiveApiKey = if (aiProvider == "DeepL") deeplApiKey else openRouterApiKey
-            if (showLyrics && lines.isNotEmpty() && effectiveApiKey.isNotBlank()) {
+            if (showLyrics && lines.isNotEmpty()) {
                 LyricsTranslationHelper.translateLyrics(
                     lyrics = lines,
                     targetLanguage = translateLanguage,
@@ -538,8 +555,6 @@ fun Lyrics(
                     songId = currentSong?.id ?: "",
                     database = database
                 )
-            } else if (effectiveApiKey.isBlank()) {
-                Toast.makeText(context, context.getString(R.string.ai_api_key_required), Toast.LENGTH_SHORT).show()
             }
         }
     }

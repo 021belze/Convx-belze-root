@@ -54,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -148,6 +149,9 @@ constructor(
                 .setUpstreamDataSourceFactory(
                     OkHttpDataSource.Factory(
                         OkHttpClient.Builder()
+                            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                             .dns(object : Dns {
                                 override fun lookup(hostname: String): List<InetAddress> {
                                     val addresses = Dns.SYSTEM.lookup(hostname)
@@ -186,16 +190,18 @@ constructor(
             }
 
             val playbackData = runBlocking(Dispatchers.IO) {
-                YTPlayerUtils.playerResponseForPlayback(
-                    mediaId,
-                    audioQuality = audioQuality,
-                    connectivityManager = connectivityManager,
-                    // Pass context so the JioSaavn intercept fires when the toggle is ON
-                    context = appContext,
-                    // Lossless is streaming-only for now: downloads stay YouTube so the
-                    // offline cache (keyed by videoId) never mixes FLAC and Opus bytes.
-                    allowLossless = false,
-                )
+                withTimeout(25_000L) {
+                    YTPlayerUtils.playerResponseForPlayback(
+                        mediaId,
+                        audioQuality = audioQuality,
+                        connectivityManager = connectivityManager,
+                        // Pass context so the JioSaavn intercept fires when the toggle is ON
+                        context = appContext,
+                        // Lossless is streaming-only for now: downloads stay YouTube so the
+                        // offline cache (keyed by videoId) never mixes FLAC and Opus bytes.
+                        allowLossless = false,
+                    )
+                }
             }.getOrThrow()
             val format = playbackData.format
 
@@ -311,14 +317,10 @@ constructor(
                 }
             }
 
-            // For YouTube streams: append the &range= param so the download cache can
-            // handle progressive HTTP range requests. For JioSaavn/TIDAL/spine streams
-            // the CDN doesn't need it and contentLength is null, so skip it.
-            val streamUrl = if (playbackData.isSaavnStream || playbackData.isTidalStream || playbackData.isSpineStream) {
-                playbackData.streamUrl
-            } else {
-                "${playbackData.streamUrl}&range=0-${format.contentLength ?: 10_000_000}"
-            }
+            // Stream URL for caching and downloading — ExoPlayer's CacheWriter handles
+            // progressive range requests via standard HTTP Range headers; do not append &range=
+            // which conflicts with Google Video CDN and stalls or truncates downloads.
+            val streamUrl = playbackData.streamUrl
 
             // Absolute deadline, not a bare duration — the read above compares this
             // against System.currentTimeMillis(). MusicService's resolver already

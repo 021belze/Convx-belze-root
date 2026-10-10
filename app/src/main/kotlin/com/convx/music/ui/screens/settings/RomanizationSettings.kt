@@ -70,6 +70,7 @@ import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.LyricsRomanizeHindiKey
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.LyricsRomanizePunjabiKey
+import com.convx.music.constants.LyricsRomanizeGreekKey
 import com.convx.music.ui.utils.appTopBarWindowInsets
 import com.convx.music.constants.LyricsRomanizeCyrillicByLineKey
 import com.convx.music.ui.utils.appTopBarWindowInsets
@@ -113,6 +114,7 @@ fun RomanizationSettings(
     val (lyricsRomanizeChinese, onLyricsRomanizeChineseChange) = rememberPreference(LyricsRomanizeChineseKey, defaultValue = true)
     val (lyricsRomanizeHindi, onLyricsRomanizeHindiChange) = rememberPreference(LyricsRomanizeHindiKey, defaultValue = true)
     val (lyricsRomanizePunjabi, onLyricsRomanizePunjabiChange) = rememberPreference(LyricsRomanizePunjabiKey, defaultValue = true)
+    val (lyricsRomanizeGreek, onLyricsRomanizeGreekChange) = rememberPreference(LyricsRomanizeGreekKey, defaultValue = true)
     val (lyricsRomanizeRussian, onLyricsRomanizeRussianChange) = rememberPreference(LyricsRomanizeRussianKey, defaultValue = true)
     val (lyricsRomanizeUkrainian, onLyricsRomanizeUkrainianChange) = rememberPreference(LyricsRomanizeUkrainianKey, defaultValue = true)
     val (lyricsRomanizeSerbian, onLyricsRomanizeSerbianChange) = rememberPreference(LyricsRomanizeSerbianKey, defaultValue = true)
@@ -251,6 +253,26 @@ fun RomanizationSettings(
                         )
                     },
                     onClick = { onLyricsRomanizePunjabiChange(!lyricsRomanizePunjabi) }
+                ),
+                Material3SettingsItem(
+                    icon = painterResource(R.drawable.language),
+                    title = { Text(stringResource(R.string.lyrics_romanize_greek)) },
+                    trailingContent = {
+                        Switch(
+                            checked = lyricsRomanizeGreek,
+                            onCheckedChange = onLyricsRomanizeGreekChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (lyricsRomanizeGreek) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onLyricsRomanizeGreekChange(!lyricsRomanizeGreek) }
                 )
             )
         )

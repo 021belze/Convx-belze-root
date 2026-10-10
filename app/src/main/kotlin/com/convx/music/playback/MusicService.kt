@@ -235,6 +235,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import timber.log.Timber
 import java.io.ObjectInputStream
@@ -2272,8 +2273,10 @@ class MusicService :
         // resolver has definitely run for the current item.
         if (playbackState == Player.STATE_READY) {
             player.currentMediaItem?.mediaId?.let { mediaId ->
-                playerStallWatchdogs[player]?.armed = losslessStreamMediaIds.contains(mediaId)
+                playerStallWatchdogs[player]?.armed = true
             }
+        } else if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+            playerStallWatchdogs[player]?.armed = false
         }
 
         // Force Repeat All if the player ignored it and ended playback
@@ -3231,12 +3234,17 @@ class MusicService :
         if (stallRecoveryJob?.isActive == true) return
         stallRecoveryJob = scope.launch {
             val mediaId = player.currentMediaItem?.mediaId ?: return@launch
+            val isLossless = losslessStreamMediaIds.contains(mediaId)
             val count = (losslessStallCount[mediaId] ?: 0) + 1
             losslessStallCount[mediaId] = count
-            Timber.tag(TAG).w("Lossless stall detected for $mediaId (attempt $count)")
+            Timber.tag(TAG).w("Playback stall detected for $mediaId (lossless=$isLossless, attempt $count)")
 
-            if (count > MAX_LOSSLESS_STALLS_BEFORE_FALLBACK) {
+            if (isLossless && count > MAX_LOSSLESS_STALLS_BEFORE_FALLBACK) {
                 triggerLosslessFallback(mediaId)
+                return@launch
+            } else if (!isLossless && count > 3) {
+                Timber.tag(TAG).w("Audio stall recovery retry limit exceeded for $mediaId")
+                handleAudioRendererError(mediaId)
                 return@launch
             }
 
@@ -3386,29 +3394,39 @@ class MusicService :
 
             val playbackData = try {
                 runBlocking(Dispatchers.IO) {
-                    val currentMeta = currentMediaMetadata.value?.takeIf { it.id == mediaId }
-                    val dbSong = if (currentMeta == null) database.song(mediaId).first() else null
+                    withTimeout(25_000L) {
+                        val currentMeta = currentMediaMetadata.value?.takeIf { it.id == mediaId }
+                        val dbSong = if (currentMeta == null) database.song(mediaId).first() else null
 
-                    val knownTitle = currentMeta?.title ?: dbSong?.song?.title
-                    val knownArtist = currentMeta?.artists?.joinToString(", ") { it.name }
-                        ?: dbSong?.artists?.joinToString(", ") { it.name }
-                    val knownDuration = currentMeta?.duration ?: dbSong?.song?.duration
-                    val knownAlbum = currentMeta?.album?.title ?: dbSong?.album?.title
+                        val knownTitle = currentMeta?.title ?: dbSong?.song?.title
+                        val knownArtist = currentMeta?.artists?.joinToString(", ") { it.name }
+                            ?: dbSong?.artists?.joinToString(", ") { it.name }
+                        val knownDuration = currentMeta?.duration ?: dbSong?.song?.duration
+                        val knownAlbum = currentMeta?.album?.title ?: dbSong?.album?.title
 
-                    YTPlayerUtils.playerResponseForPlayback(
-                        mediaId,
-                        audioQuality = audioQuality,
-                        connectivityManager = connectivityManager,
-                        context = this@MusicService,
-                        forceStandardAudio = forceStandardAudioMediaIds.contains(mediaId),
-                        knownTitle = knownTitle,
-                        knownArtist = knownArtist,
-                        knownDuration = knownDuration,
-                        knownAlbum = knownAlbum,
-                    )
+                        YTPlayerUtils.playerResponseForPlayback(
+                            mediaId,
+                            audioQuality = audioQuality,
+                            connectivityManager = connectivityManager,
+                            context = this@MusicService,
+                            forceStandardAudio = forceStandardAudioMediaIds.contains(mediaId),
+                            knownTitle = knownTitle,
+                            knownArtist = knownArtist,
+                            knownDuration = knownDuration,
+                            knownAlbum = knownAlbum,
+                        )
+                    }
                 }.getOrElse { throwable ->
                     when (throwable) {
                         is PlaybackException -> throw throwable
+
+                        is kotlinx.coroutines.TimeoutCancellationException -> {
+                            throw PlaybackException(
+                                getString(R.string.error_timeout),
+                                throwable,
+                                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+                            )
+                        }
 
                         is java.net.ConnectException, is java.net.UnknownHostException -> {
                             throw PlaybackException(
