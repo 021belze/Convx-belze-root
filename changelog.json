@@ -1,34 +1,35 @@
 {
-  "description": "Convx 1.5.3 (Beta) delivers targeted visual refinements, spring animation enhancements, and refined layout geometry across lyrics sharing and search navigation.",
+  "description": "Convx 1.5.3 (Beta r14) introduces a built-in free lyrics translation engine, offline Greek romanization, Classic Player layout and artwork fixes, alongside vital playback and download resilience enhancements.",
   "image": "",
   "changelog": [
     {
-      "title": "Search & Liquid Glass Interface",
+      "title": "Lyrics & Translation Engine",
       "items": [
-        "Restored full spring physics, inertia damping, and smooth slide animations for the category pill selector on the Search screen.",
-        "Maintained real-time liquid glass refraction and chromatic aberration depth across all display scales."
+        "Integrated built-in free Google Translate engine: lyrics can now be translated out-of-the-box without requiring AI API keys or third-party configurations.",
+        "Implemented persistent Room database caching for translations, guaranteeing instantaneous zero-network reloads on subsequent plays.",
+        "Added offline Greek (ELOT 743 / ISO 843) lyric romanization with a dedicated toggle switch in Romanization Settings.",
+        "Made the lyrics translation toggle universally available and interactive directly within the player transport row and lyrics menu."
       ]
     },
     {
-      "title": "Lyrics Sharing Visual Polish",
+      "title": "Classic Player Refinements",
       "items": [
-        "Removed background quotation mark watermark for a clean, minimalist typography presentation.",
-        "Eliminated outer card borders for a modern borderless aesthetic.",
-        "Perfected 24dp rounded corner curvature and removed dark corner artifacts in both the customization preview dialog and exported images."
+        "Resolved missing album cover issue in Classic Player theme; artwork now renders reliably across all player background styles.",
+        "Cleaned up transport control hierarchy by removing redundant repeat and favorite buttons from the primary playback row, keeping Previous, Play (100dp), and Next neatly centered and balanced."
       ]
     },
     {
-      "title": "Lyrics & Player Ergonomics",
+      "title": "Playback & Download Stability",
       "items": [
-        "Optimized menu button hierarchy: the secondary track action menu is now reserved exclusively for landscape view, eliminating duplicate controls in vertical portrait mode.",
-        "Fixed layout padding assertions during lyric card rendering on high-density displays."
+        "Fixed audio playback freezes and stream stall during network handoffs using safe coroutine timeouts and active watchdog stall arming.",
+        "Resolved download progress stall caused by conflicting range query parameters, bolstered by resilient OkHttp connection and read timeouts."
       ]
     },
     {
-      "title": "Performance & Architecture",
+      "title": "UI & Landscape Ergonomics",
       "items": [
-        "Preserved high-speed direct CDN asset distribution for rapid in-app beta updates.",
-        "Ongoing performance improvements for low-latency audio playback and backdrop rendering."
+        "Eliminated Liquid Glass shader seam cut and visual artifacts when dialing reflection height to maximum values.",
+        "Added vertical scrolling support to Sleep Timer and Bluetooth Audio Device sheets, preventing UI cutoff in horizontal/landscape view."
       ]
     }
   ]
