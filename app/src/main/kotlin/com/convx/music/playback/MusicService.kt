@@ -902,23 +902,37 @@ class MusicService :
         }.collectLatest(scope) { (mediaMetadata, showLyrics) ->
             if (showLyrics && mediaMetadata != null) {
                 val existing = database.lyrics(mediaMetadata.id).first()
-                val allowedProviders = setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown")
-                val isCorrupted = existing != null && mediaMetadata.duration > 0 && !LyricsUtils.isValidLrcForDuration(existing.lyrics, mediaMetadata.duration)
-                if (existing != null && (existing.provider !in allowedProviders || isCorrupted)) {
-                    database.query { delete(existing) }
-                }
-                if (existing == null || existing.provider !in allowedProviders || isCorrupted) {
+                if (existing?.provider == "Manual") return@collectLatest // Never overwrite manual lyrics
+
+                val isNotFound = existing?.lyrics == LyricsEntity.LYRICS_NOT_FOUND
+                val allowedProviders = com.convx.music.lyrics.LyricsProviderRegistry.allKnownProviders
+                val isSynced = existing?.lyrics?.startsWith("[") == true
+                val isCorrupted = existing != null && isSynced && mediaMetadata.duration > 0 && !LyricsUtils.isValidLrcForDuration(existing.lyrics, mediaMetadata.duration)
+
+                if (existing == null || existing.provider !in allowedProviders || (isCorrupted && !isNotFound)) {
                     // Short yield so initial audio stream buffer gets network bandwidth priority
                     kotlinx.coroutines.delay(250L)
                     val lyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
-                    database.query {
-                        upsert(
-                            LyricsEntity(
-                                id = mediaMetadata.id,
-                                lyrics = lyricsWithProvider.lyrics,
-                                provider = lyricsWithProvider.provider,
-                            ),
-                        )
+                    if (lyricsWithProvider.lyrics.isNotBlank() && lyricsWithProvider.lyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+                        database.query {
+                            upsert(
+                                LyricsEntity(
+                                    id = mediaMetadata.id,
+                                    lyrics = lyricsWithProvider.lyrics,
+                                    provider = lyricsWithProvider.provider,
+                                ),
+                            )
+                        }
+                    } else if (existing == null && lyricsWithProvider.lyrics == LyricsEntity.LYRICS_NOT_FOUND) {
+                        database.query {
+                            upsert(
+                                LyricsEntity(
+                                    id = mediaMetadata.id,
+                                    lyrics = LyricsEntity.LYRICS_NOT_FOUND,
+                                    provider = "Unknown",
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -1540,7 +1554,7 @@ class MusicService :
                                 REPEAT_MODE_OFF -> R.string.repeat_mode_off
                                 REPEAT_MODE_ONE -> R.string.repeat_mode_one
                                 REPEAT_MODE_ALL -> R.string.repeat_mode_all
-                                else -> throw IllegalStateException()
+                                else -> R.string.repeat_mode_off
                             },
                         ),
                     ).setIconResId(
@@ -1548,7 +1562,7 @@ class MusicService :
                             REPEAT_MODE_OFF -> R.drawable.repeat
                             REPEAT_MODE_ONE -> R.drawable.repeat_one_on
                             REPEAT_MODE_ALL -> R.drawable.repeat_on
-                            else -> throw IllegalStateException()
+                            else -> R.drawable.repeat
                         },
                     ).setSessionCommand(CommandToggleRepeatMode)
                     .build(),
@@ -2107,8 +2121,15 @@ class MusicService :
                                 releaseLoudnessEnhancer()
                             }
                         } else {
-                            loudnessEnhancer?.enabled = false
-                            Timber.tag(TAG).w("Normalization enabled but no loudness data available - no normalization applied")
+                            // If normalization is enabled but format data hasn't arrived yet, keep enhancer at neutral 0 mB
+                            // instead of violently disabling/enabling and causing an abrupt volume jump when format arrives.
+                            try {
+                                loudnessEnhancer?.setTargetGain(0)
+                                loudnessEnhancer?.enabled = true
+                            } catch (e: Exception) {
+                                loudnessEnhancer?.enabled = false
+                            }
+                            Timber.tag(TAG).d("Normalization enabled, holding neutral gain until format data resolves")
                         }
                     }
                 } else {
@@ -2273,7 +2294,7 @@ class MusicService :
         // resolver has definitely run for the current item.
         if (playbackState == Player.STATE_READY) {
             player.currentMediaItem?.mediaId?.let { mediaId ->
-                playerStallWatchdogs[player]?.armed = true
+                playerStallWatchdogs[player]?.armed = losslessStreamMediaIds.contains(mediaId)
             }
         } else if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
             playerStallWatchdogs[player]?.armed = false
@@ -2352,6 +2373,8 @@ class MusicService :
                 val focusGranted = requestAudioFocus()
                 if (focusGranted) {
                     openAudioEffectSession()
+                } else {
+                    player.pause()
                 }
             } else {
                 closeAudioEffectSession()
@@ -3234,6 +3257,11 @@ class MusicService :
         if (stallRecoveryJob?.isActive == true) return
         stallRecoveryJob = scope.launch {
             val mediaId = player.currentMediaItem?.mediaId ?: return@launch
+            // Ignore intro silence in the first 3 seconds of a track
+            if (player.currentPosition < 3000L) {
+                Timber.tag(TAG).d("Ignoring stall detection during track intro silence (<3s)")
+                return@launch
+            }
             val isLossless = losslessStreamMediaIds.contains(mediaId)
             val count = (losslessStallCount[mediaId] ?: 0) + 1
             losslessStallCount[mediaId] = count

@@ -20,7 +20,11 @@ val appVersionPatch = versionProps.getProperty("VERSION_PATCH").toInt()
 val appVersionRevision = (versionProps.getProperty("VERSION_REVISION") ?: "0").toInt()
 val ciRunNumber = (project.findProperty("nightlyRun") as String?)?.toIntOrNull() ?: 0
 val effectiveRevision = if (ciRunNumber > 0) ciRunNumber else appVersionRevision
-val appVersionCode = maxOf(105031, appVersionMajor * 100_000 + appVersionMinor * 1_000 + appVersionPatch * 10 + effectiveRevision)
+
+// Stable releases always receive a higher tier modifier (999) so they cleanly upgrade over any beta/nightly run
+val isStable = ciRunNumber == 0 && appVersionRevision == 0
+val buildModifier = if (isStable) 999 else minOf(effectiveRevision, 899)
+val appVersionCode = (appVersionMajor * 10_000_000) + (appVersionMinor * 100_000) + (appVersionPatch * 1_000) + buildModifier
 val appVersionName = if (effectiveRevision > 0) "$appVersionMajor.$appVersionMinor.$appVersionPatch-beta-r$effectiveRevision" else "$appVersionMajor.$appVersionMinor.$appVersionPatch"
 
 plugins {
@@ -390,7 +394,7 @@ tasks.register("bumpVersion") {
         )
 
         val newVersionName = "$major.$minor.$patch"
-        val newVersionCode = major * 10_000 + minor * 100 + patch
+        val newVersionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 + 999
         println("Bumped $part: $appVersionName ($appVersionCode) -> $newVersionName ($newVersionCode)")
         println()
         println("Next steps:")

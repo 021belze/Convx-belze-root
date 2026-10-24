@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -102,34 +103,14 @@ fun rememberAdjustedFontSize(
     }
 
     LaunchedEffect(key1 = text, key2 = maxWidth, key3 = maxHeight) {
-        val targetWidthPx = with(density) { maxWidth.toPx() * 0.94f }
-        val targetHeightPx = with(density) { maxHeight.toPx() * 0.94f }
+        val targetWidthPx = with(density) { maxWidth.toPx() * 0.94f }.toInt().coerceAtLeast(1)
+        val targetHeightPx = with(density) { maxHeight.toPx() * 0.94f }.toInt().coerceAtLeast(1)
         if (text.isBlank()) {
             calculatedFontSize = minFontSize
             return@LaunchedEffect
         }
 
-        if (text.length < 20) {
-            val largerSize = (initialFontSize.value * 1.1f).sp
-            val result = measurer.measure(
-                text = AnnotatedString(text),
-                style = style.copy(fontSize = largerSize)
-            )
-            if (result.size.width <= targetWidthPx && result.size.height <= targetHeightPx) {
-                calculatedFontSize = largerSize
-                return@LaunchedEffect
-            }
-        } else if (text.length < 35) {
-            val largerSize = (initialFontSize.value * 0.95f).sp
-            val result = measurer.measure(
-                text = AnnotatedString(text),
-                style = style.copy(fontSize = largerSize)
-            )
-            if (result.size.width <= targetWidthPx && result.size.height <= targetHeightPx) {
-                calculatedFontSize = largerSize
-                return@LaunchedEffect
-            }
-        }
+        val textConstraints = Constraints(maxWidth = targetWidthPx)
 
         var minSize = minFontSize.value
         var maxSize = initialFontSize.value
@@ -143,10 +124,11 @@ fun rememberAdjustedFontSize(
 
             val result = measurer.measure(
                 text = AnnotatedString(text),
-                style = style.copy(fontSize = midSizeSp)
+                style = style.copy(fontSize = midSizeSp),
+                constraints = textConstraints
             )
 
-            if (result.size.width <= targetWidthPx && result.size.height <= targetHeightPx) {
+            if (result.size.height <= targetHeightPx) {
                 bestFit = midSize
                 minSize = midSize + 0.5f
             } else {
@@ -188,12 +170,12 @@ fun LyricsImageCard(
     val dims = remember(lineCount) {
         when {
             lineCount == 1 -> LyricsCardDimensions(
-                coverArtSize = 76.dp,
-                coverCornerRadius = 16.dp,
-                padding = 28.dp,
-                initialFontSize = 32.sp,
-                minFontSize = 24.sp,
-                lineHeightMultiplier = 1.3f
+                coverArtSize = 64.dp,
+                coverCornerRadius = 14.dp,
+                padding = 22.dp,
+                initialFontSize = 28.sp,
+                minFontSize = 16.sp,
+                lineHeightMultiplier = 1.28f
             )
             lineCount <= 3 -> LyricsCardDimensions(
                 coverArtSize = 62.dp,

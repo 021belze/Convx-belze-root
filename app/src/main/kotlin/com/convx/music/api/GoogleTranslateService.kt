@@ -1,8 +1,3 @@
-/**
- * Convx Project (C) 2026
- * Licensed under GPL-3.0 | See git history for contributors
- */
-
 package com.convx.music.api
 
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +17,9 @@ object GoogleTranslateService {
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    private const val LINE_DELIMITER = "\n---\n"
+    private val SPLIT_REGEX = Regex("""\r?\n?---\r?\n?""")
+
     suspend fun translate(
         text: String,
         targetLanguage: String = "id",
@@ -33,8 +31,20 @@ object GoogleTranslateService {
         }
 
         val effectiveTargetLang = normalizeLanguageCode(targetLanguage)
-        val lines = text.lines()
-        val originalLineCount = lines.size
+        val originalLines = text.lines()
+        val originalLineCount = originalLines.size
+
+        // Extract non-blank lines and record their original indices
+        val indexedNonBlank = originalLines.mapIndexedNotNull { index, line ->
+            if (line.isNotBlank()) index to line.trim() else null
+        }
+
+        if (indexedNonBlank.isEmpty()) {
+            return@withContext Result.success(List(originalLineCount) { "" })
+        }
+
+        // Join non-blank lines with boundary delimiter to guarantee individual line translation without paragraph merging
+        val payloadText = indexedNonBlank.joinToString(LINE_DELIMITER) { it.second }
 
         var currentAttempt = 0
         var lastException: Exception? = null
@@ -42,7 +52,7 @@ object GoogleTranslateService {
         while (currentAttempt <= maxRetries) {
             try {
                 val formBody = FormBody.Builder()
-                    .add("q", text)
+                    .add("q", payloadText)
                     .build()
 
                 val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sourceLanguage&tl=$effectiveTargetLang&dt=t"
@@ -75,14 +85,19 @@ object GoogleTranslateService {
                     }
 
                     val fullTranslatedText = translatedBuilder.toString()
-                    val translatedLines = fullTranslatedText.lines().toMutableList()
+                    val segments = fullTranslatedText.split(SPLIT_REGEX)
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() && it != "---" }
 
-                    // Ensure returned line count matches or is safely padded
-                    while (translatedLines.size < originalLineCount) {
-                        translatedLines.add("")
+                    // Reconstruct the exact original lines preserving empty line positions
+                    val resultLines = Array(originalLineCount) { "" }
+                    for (i in indexedNonBlank.indices) {
+                        val originalIndex = indexedNonBlank[i].first
+                        val translatedSegment = segments.getOrNull(i) ?: ""
+                        resultLines[originalIndex] = translatedSegment
                     }
 
-                    return@withContext Result.success(translatedLines.take(originalLineCount))
+                    return@withContext Result.success(resultLines.toList())
                 }
             } catch (e: Exception) {
                 lastException = e

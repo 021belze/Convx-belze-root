@@ -23,6 +23,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import com.convx.music.ui.utils.marqueeWhenVisible
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -754,8 +755,8 @@ private fun NewMiniPlayerSongInfo(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
+                overflow = TextOverflow.Clip,
+                modifier = Modifier.marqueeWhenVisible(),
             )
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -768,8 +769,8 @@ private fun NewMiniPlayerSongInfo(
                         color = onSurfaceColor.copy(alpha = 0.7f),
                         fontSize = 12.sp,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.marqueeWhenVisible(),
                     )
                 }
             }

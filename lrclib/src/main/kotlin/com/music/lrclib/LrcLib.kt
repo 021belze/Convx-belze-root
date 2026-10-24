@@ -2,8 +2,6 @@ package com.music.lrclib
 
 import com.music.lrclib.models.Track
 import com.music.lrclib.models.bestMatchingFor
-import com.music.lrclib.models.isValidLrcForDuration
-import com.music.lrclib.models.timingFingerprint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -39,7 +37,7 @@ object LrcLib {
 
             defaultRequest {
                 url("https://lrclib.net")
-                header("User-Agent", "Convx/1.5.2 (https://github.com/021belze/Convx-belze-root)")
+                header("User-Agent", "Convx/1.5.3 (https://github.com/021belze/Convx-belze-root)")
             }
 
             expectSuccess = false
@@ -72,7 +70,6 @@ object LrcLib {
 
     private fun cleanArtist(artist: String): String {
         var cleaned = artist.trim()
-        // Get primary artist (first one before any separator)
         for (separator in artistSeparators) {
             if (cleaned.contains(separator, ignoreCase = true)) {
                 cleaned = cleaned.split(separator, ignoreCase = true, limit = 2)[0]
@@ -124,34 +121,23 @@ object LrcLib {
         artist: String,
         title: String,
         album: String? = null,
-        duration: Int = -1,
     ): List<Track> {
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
-        
-        // Fast Strategy 1: Targeted track + artist search
+
+        // Strategy 1: Targeted track + artist search
         val targetResults = queryLyricsWithParams(
             trackName = cleanedTitle,
             artistName = cleanedArtist,
             albumName = album
         ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        
-        // Strategy 2: Combined query.
-        // If Strategy 1 didn't find any valid synced lyrics for the target duration,
-        // or if we have fewer than 3 candidates, expand with general query to find variants like "- Edit"
-        val needExpansion = targetResults.isEmpty() || (duration > 0 && targetResults.none { 
-            it.syncedLyrics != null && isValidLrcForDuration(it.syncedLyrics, duration) 
-        }) || targetResults.size < 3
 
-        val combinedResults = if (needExpansion) {
-            queryLyricsWithParams(
-                query = "$cleanedArtist $cleanedTitle"
-            ).filter { it.syncedLyrics != null || it.plainLyrics != null }
-        } else {
-            emptyList()
-        }
-        
-        return (targetResults + combinedResults).distinctBy { it.id }
+        if (targetResults.isNotEmpty()) return targetResults
+
+        // Strategy 2: Combined query fallback
+        return queryLyricsWithParams(
+            query = "$cleanedArtist $cleanedTitle"
+        ).filter { it.syncedLyrics != null || it.plainLyrics != null }
     }
 
     suspend fun getLyrics(
@@ -163,28 +149,30 @@ object LrcLib {
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
 
-        // Search candidate tracks from LRCLIB (with smart expansion for variants)
-        val tracks = queryLyrics(artist, title, album, duration)
-
-        // Also query exact match via /api/get
+        // Fast path: Exact match via /api/get (direct database hit)
         val exactTrack = queryExactLyrics(cleanedTitle, cleanedArtist, duration, album)
             ?: (if (!album.isNullOrBlank()) queryExactLyrics(cleanedTitle, cleanedArtist, duration, null) else null)
             ?: (if (cleanedTitle != title.trim() || cleanedArtist != artist.trim()) {
                 queryExactLyrics(title.trim(), artist.trim(), duration, null)
             } else null)
 
-        // Combine exactTrack into candidate pool so consensus clustering evaluates all candidates
-        val candidatePool = (listOfNotNull(exactTrack) + tracks).distinctBy { it.id }
+        val exactLyrics = exactTrack?.let { track ->
+            track.syncedLyrics ?: track.plainLyrics
+        }
 
-        val res = candidatePool.bestMatchingFor(duration, cleanedTitle, cleanedArtist)?.let { track ->
-            track.syncedLyrics?.takeIf { isValidLrcForDuration(it, duration) } ?: track.plainLyrics
+        if (!exactLyrics.isNullOrBlank()) {
+            return@runCatching exactLyrics
+        }
+
+        // Fallback path: Search endpoint
+        val tracks = queryLyrics(artist, title, album)
+
+        val res = tracks.bestMatchingFor(duration, cleanedTitle, cleanedArtist)?.let { track ->
+            track.syncedLyrics ?: track.plainLyrics
         }?.let(LrcLib::Lyrics)
 
-        val fallbackLyrics = exactTrack?.syncedLyrics ?: exactTrack?.plainLyrics
         if (res != null) {
             return@runCatching res.text
-        } else if (!fallbackLyrics.isNullOrBlank()) {
-            return@runCatching fallbackLyrics
         } else {
             throw IllegalStateException("Lyrics unavailable")
         }
@@ -200,8 +188,8 @@ object LrcLib {
         val cleanedTitle = cleanTitle(title)
         val cleanedArtist = cleanArtist(artist)
 
-        // Query both target and general candidates
-        val tracks = queryLyrics(artist, title, album, duration)
+        // Query both target and search candidates
+        val tracks = queryLyrics(artist, title, album)
         val exactTrack = queryExactLyrics(cleanedTitle, cleanedArtist, duration, album)
             ?: (if (!album.isNullOrBlank()) queryExactLyrics(cleanedTitle, cleanedArtist, duration, null) else null)
             ?: (if (cleanedTitle != title.trim() || cleanedArtist != artist.trim()) {
@@ -210,69 +198,42 @@ object LrcLib {
 
         val candidatePool = (listOfNotNull(exactTrack) + tracks).distinctBy { it.id }
 
-        // 1. Strict validity guard & Reasonable duration filter
-        val validCandidates = candidatePool.filter { track ->
-            val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
-            if (titleSim < 0.50) return@filter false
+        // Sort candidates:
+        // 1. Prioritize synced lyrics heavily (+10.0)
+        // 2. Prioritize duration closeness if duration known
+        // 3. Prioritize name & artist similarity
+        val sortedTracks = candidatePool.sortedByDescending { track ->
+            var score = 0.0
+            if (track.syncedLyrics != null) score += 10.0
 
             if (duration > 0) {
                 val diff = abs(track.duration.toInt() - duration)
-                // Discard extreme mismatches (> 25s diff)
-                if (diff > 25) return@filter false
-            }
-
-            if (track.syncedLyrics != null && !isValidLrcForDuration(track.syncedLyrics, duration)) {
-                return@filter false
-            }
-
-            track.syncedLyrics != null || track.plainLyrics != null
-        }
-
-        // 2. Smart scoring: Synced karaoke lyrics at the TOP
-        val scoredTracks = validCandidates.sortedByDescending { track ->
-            var score = 0.0
-            val diff = if (duration > 0) abs(track.duration.toInt() - duration) else 0
-
-            // Strongly prefer valid synced lyrics over plain text (+15.0)
-            if (track.syncedLyrics != null && isValidLrcForDuration(track.syncedLyrics, duration)) {
-                score += 15.0
-            }
-
-            if (duration > 0) {
-                when {
-                    diff <= 1 -> score += 10.0 // Top priority: exact master match
-                    diff <= 2 -> score += 8.0
-                    diff <= 5 -> score += 5.0
-                    diff <= 10 -> score += 2.0
-                    else -> score -= (diff * 0.1)
-                }
+                score += maxOf(0.0, (30 - diff) * 0.2)
             }
 
             val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
             val artistSim = calculateStringSimilarity(cleanedArtist, track.artistName)
             score += (titleSim * 2.0 + artistSim)
-
             score
         }
 
-        // 3. Deduplication: group duplicate identical uploads so the user sees distinct options
-        val seenFingerprints = HashSet<String>()
+        val seenLyrics = HashSet<String>()
         var count = 0
 
-        for (track in scoredTracks) {
+        for (track in sortedTracks) {
             currentCoroutineContext().ensureActive()
-            if (count >= 15) break
+            if (count >= 12) break
 
-            val lyricsText = track.syncedLyrics?.takeIf { isValidLrcForDuration(it, duration) } ?: track.plainLyrics
+            // Minimum sanity filter: Title similarity at least 35%
+            val titleSim = calculateStringSimilarity(cleanedTitle, track.trackName)
+            if (titleSim < 0.35) continue
+
+            val lyricsText = track.syncedLyrics ?: track.plainLyrics
             if (lyricsText.isNullOrBlank()) continue
 
-            val fingerprint = if (track.syncedLyrics != null) {
-                timingFingerprint(track.syncedLyrics)
-            } else {
-                "plain:" + lyricsText.take(50).filter { it.isLetterOrDigit() }.lowercase()
-            }
-
-            if (seenFingerprints.add(fingerprint)) {
+            // Deduplicate by text signature (first 60 chars of alphanumeric)
+            val signature = lyricsText.take(60).filter { it.isLetterOrDigit() }.lowercase()
+            if (seenLyrics.add(signature)) {
                 count++
                 callback(lyricsText)
             }
@@ -282,10 +243,10 @@ object LrcLib {
     private fun calculateStringSimilarity(str1: String, str2: String): Double {
         val s1 = str1.trim().lowercase()
         val s2 = str2.trim().lowercase()
-        
+
         if (s1 == s2) return 1.0
         if (s1.isEmpty() || s2.isEmpty()) return 0.0
-        
+
         return when {
             s1.contains(s2) || s2.contains(s1) -> 0.8
             else -> {
@@ -300,21 +261,21 @@ object LrcLib {
         val len1 = str1.length
         val len2 = str2.length
         val matrix = Array(len1 + 1) { IntArray(len2 + 1) }
-        
+
         for (i in 0..len1) matrix[i][0] = i
         for (j in 0..len2) matrix[0][j] = j
-        
+
         for (i in 1..len1) {
             for (j in 1..len2) {
                 val cost = if (str1[i - 1] == str2[j - 1]) 0 else 1
                 matrix[i][j] = minOf(
-                    matrix[i - 1][j] + 1,      // deletion
-                    matrix[i][j - 1] + 1,      // insertion
-                    matrix[i - 1][j - 1] + cost // substitution
+                    matrix[i - 1][j] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j - 1] + cost
                 )
             }
         }
-        
+
         return matrix[len1][len2]
     }
 
@@ -349,5 +310,3 @@ object LrcLib {
                 }.getOrNull()
     }
 }
-
-

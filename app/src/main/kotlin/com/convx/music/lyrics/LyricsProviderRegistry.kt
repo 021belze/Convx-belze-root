@@ -13,15 +13,33 @@ import com.convx.music.constants.PreferredLyricsProvider
  * and handles serialization/deserialization of the custom priority order.
  */
 object LyricsProviderRegistry {
-    private val providerMap = mapOf(
+    val providerMap = mapOf<String, LyricsProvider>(
         "LrcLib"           to LrcLibLyricsProvider,
         "YouTubeMusic"     to YouTubeLyricsProvider,
         "YouTube Music"    to YouTubeLyricsProvider,
         "YouTubeSubtitle"  to YouTubeSubtitleLyricsProvider,
         "YouTube Subtitle" to YouTubeSubtitleLyricsProvider,
+        "Kugou"            to KuGouLyricsProvider,
+        "Musixmatch"       to MusixmatchLyricsProvider,
+        "Paxsenix"         to PaxSenixLyricsProvider,
+        "SimpMusic"        to SimpMusicLyricsProvider,
+        "YouLyPlus"        to YouLyPlusLyricsProvider,
+        "BetterLyrics"     to BetterLyricsProvider,
     )
 
-    val providerNames = listOf("LrcLib", "YouTubeMusic", "YouTubeSubtitle")
+    val providerNames = listOf(
+        "LrcLib",
+        "YouTubeMusic",
+        "YouTubeSubtitle",
+        "Musixmatch",
+        "Paxsenix",
+        "SimpMusic",
+        "YouLyPlus",
+        "Kugou",
+        "BetterLyrics",
+    )
+
+    val allKnownProviders: Set<String> = providerMap.keys + setOf("Manual", "Unknown")
 
     fun getProviderByName(name: String): LyricsProvider? = providerMap[name]
 
@@ -54,6 +72,12 @@ object LyricsProviderRegistry {
         "LrcLib"                              -> "LrcLib (Karaoke)"
         "YouTubeMusic", "YouTube Music"       -> "YouTube Music (Official)"
         "YouTubeSubtitle", "YouTube Subtitle" -> "YouTube Subtitle (CC)"
+        "Musixmatch"                          -> "Musixmatch"
+        "Paxsenix"                            -> "Paxsenix"
+        "SimpMusic"                           -> "SimpMusic"
+        "YouLyPlus"                           -> "YouLyPlus"
+        "Kugou"                               -> "Kugou"
+        "BetterLyrics"                        -> "BetterLyrics"
         else                                  -> name
     }
 }

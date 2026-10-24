@@ -42,6 +42,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import com.convx.music.ui.utils.marqueeWhenVisible
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -517,7 +518,11 @@ fun BottomSheetPlayer(
     val activePlayer by playerConnection.service.playerFlow.collectAsStateWithLifecycle(
         initialValue = playerConnection.player
     )
-    val playerFormat by produceState(initialValue = activePlayer?.audioFormat, activePlayer) {
+    val playerFormat by produceState(
+        initialValue = activePlayer?.audioFormat,
+        activePlayer,
+        mediaMetadata?.id
+    ) {
         val target = activePlayer ?: return@produceState
         value = target.audioFormat
         val listener = object : Player.Listener {
@@ -1976,11 +1981,11 @@ fun BottomSheetPlayer(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            overflow = TextOverflow.Clip,
                             color = TextBackgroundColor,
                             modifier =
                             Modifier
-                                .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp)
+                                .marqueeWhenVisible()
                                 .combinedClickable(
                                     enabled = true,
                                     indication = null,
@@ -2027,7 +2032,7 @@ fun BottomSheetPlayer(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp)
+                                    .marqueeWhenVisible()
                                     .padding(end = 12.dp)
                             ) {
                                 var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -2036,7 +2041,7 @@ fun BottomSheetPlayer(
                                     text = annotatedString,
                                     style = MaterialTheme.typography.titleMedium.copy(color = TextBackgroundColor),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    overflow = TextOverflow.Clip,
                                     onTextLayout = { layoutResult = it },
                                     modifier = Modifier
                                         .pointerInput(Unit) {
@@ -3364,26 +3369,33 @@ fun BottomSheetPlayer(
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
                         val isExpandedProvider = remember(state) { { state.isExpanded } }
-                        AnimatedContent(
-                            targetState = showInlineLyrics,
-                            label = "Lyrics",
-                            transitionSpec = { fadeIn() togetherWith fadeOut() }
-                        ) { showLyrics ->
-                            if (showLyrics) {
-                                InlineLyricsView(
-                                    mediaMetadata = mediaMetadata,
-                                    showLyrics = showLyrics,
-                                    positionProvider = { effectivePosition }
-                                )
-                            } else {
-                                Thumbnail(
-                                    sliderPositionProvider = sliderPositionProvider,
-                                    modifier = Modifier.animateContentSize(),
-                                    isPlayerExpanded = isExpandedProvider,
-                                    isLandscape = true,
-                                    isListenTogetherGuest = isListenTogetherGuest
-                                )
-                            }
+                        // Keep BOTH composables always in composition to prevent state loss
+                        // (rawLyrics resets to null and shows loading spinner if InlineLyricsView
+                        // is removed from the tree each time the user switches tabs).
+                        // Visibility is controlled via graphicsLayer alpha instead of conditional.
+                        Box(modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = if (showInlineLyrics) 0f else 1f }
+                            .then(if (showInlineLyrics) Modifier.pointerInput(Unit) {} else Modifier)
+                        ) {
+                            Thumbnail(
+                                sliderPositionProvider = sliderPositionProvider,
+                                modifier = Modifier.animateContentSize(),
+                                isPlayerExpanded = isExpandedProvider,
+                                isLandscape = true,
+                                isListenTogetherGuest = isListenTogetherGuest
+                            )
+                        }
+                        Box(modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = if (showInlineLyrics) 1f else 0f }
+                            .then(if (!showInlineLyrics) Modifier.pointerInput(Unit) {} else Modifier)
+                        ) {
+                            InlineLyricsView(
+                                mediaMetadata = mediaMetadata,
+                                showLyrics = showInlineLyrics,
+                                positionProvider = { effectivePosition }
+                            )
                         }
                     }
 
@@ -3443,25 +3455,32 @@ fun BottomSheetPlayer(
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
                         val isExpandedProvider = remember(state) { { state.isExpanded } }
-                        AnimatedContent(
-                            targetState = showInlineLyrics,
-                            label = "Lyrics",
-                            transitionSpec = { fadeIn() togetherWith fadeOut() }
-                        ) { showLyrics ->
-                            if (showLyrics) {
-                                InlineLyricsView(
-                                    mediaMetadata = mediaMetadata,
-                                    showLyrics = showLyrics,
-                                    positionProvider = { effectivePosition }
-                                )
-                            } else {
-                                Thumbnail(
-                                    sliderPositionProvider = sliderPositionProvider,
-                                    modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection),
-                                    isPlayerExpanded = isExpandedProvider,
-                                    isListenTogetherGuest = isListenTogetherGuest
-                                )
-                            }
+                        // Keep BOTH composables always in composition to prevent state loss
+                        // (rawLyrics resets to null and shows loading spinner if InlineLyricsView
+                        // is removed from the tree each time the user switches tabs).
+                        // Visibility is controlled via graphicsLayer alpha instead of conditional.
+                        Box(modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = if (showInlineLyrics) 0f else 1f }
+                            .then(if (showInlineLyrics) Modifier.pointerInput(Unit) {} else Modifier)
+                        ) {
+                            Thumbnail(
+                                sliderPositionProvider = sliderPositionProvider,
+                                modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection),
+                                isPlayerExpanded = isExpandedProvider,
+                                isListenTogetherGuest = isListenTogetherGuest
+                            )
+                        }
+                        Box(modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = if (showInlineLyrics) 1f else 0f }
+                            .then(if (!showInlineLyrics) Modifier.pointerInput(Unit) {} else Modifier)
+                        ) {
+                            InlineLyricsView(
+                                mediaMetadata = mediaMetadata,
+                                showLyrics = showInlineLyrics,
+                                positionProvider = { effectivePosition }
+                            )
                         }
                     }
 
@@ -3559,7 +3578,7 @@ fun InlineLyricsView(
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val rawLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue = null)
-    val allowedProviders = remember { setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown") }
+    val allowedProviders = remember { com.convx.music.lyrics.LyricsProviderRegistry.allKnownProviders }
     val currentLyrics = remember(rawLyrics) {
         if (rawLyrics != null && rawLyrics!!.provider !in allowedProviders) null else rawLyrics
     }
@@ -3568,9 +3587,21 @@ fun InlineLyricsView(
     val database = LocalDatabase.current
     val coroutineScope = rememberCoroutineScope()
 
+    var isFetchTimedOut by remember(mediaMetadata?.id) { mutableStateOf(false) }
+
+    LaunchedEffect(mediaMetadata?.id) {
+        isFetchTimedOut = false
+        // Safety timeout: if lyrics remain null after 4 seconds, stop spinning and show not found
+        kotlinx.coroutines.delay(4000)
+        if (rawLyrics == null) {
+            isFetchTimedOut = true
+        }
+    }
+
     LaunchedEffect(mediaMetadata?.id, rawLyrics) {
         if (mediaMetadata != null) {
             val raw = rawLyrics
+            if (raw?.provider == "Manual") return@LaunchedEffect
             val isInvalid = raw != null && raw.provider !in allowedProviders
             if (raw == null || isInvalid) {
                 withContext(Dispatchers.IO) {
@@ -3581,11 +3612,17 @@ fun InlineLyricsView(
                         )
                         val lyricsHelper = entryPoint.lyricsHelper()
                         val fetchedLyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
-                        database.query {
-                            upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
+                        if (fetchedLyricsWithProvider.lyrics.isNotBlank() && fetchedLyricsWithProvider.lyrics != LyricsEntity.LYRICS_NOT_FOUND) {
+                            database.query {
+                                upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
+                            }
+                        } else if (raw == null && fetchedLyricsWithProvider.lyrics == LyricsEntity.LYRICS_NOT_FOUND) {
+                            database.query {
+                                upsert(LyricsEntity(mediaMetadata.id, LyricsEntity.LYRICS_NOT_FOUND, "Unknown"))
+                            }
                         }
                     } catch (e: Exception) {
-                        // Handle error
+                        timber.log.Timber.tag("InlineLyricsView").e(e, "Error fetching lyrics for ${mediaMetadata.id}")
                     }
                 }
             }
@@ -3599,10 +3636,10 @@ fun InlineLyricsView(
         contentAlignment = Alignment.Center
     ) {
         when {
-            lyrics == null -> {
+            lyrics == null && !isFetchTimedOut -> {
                 ContainedLoadingIndicator()
             }
-            lyrics == LyricsEntity.LYRICS_NOT_FOUND -> {
+            lyrics == LyricsEntity.LYRICS_NOT_FOUND || (lyrics == null && isFetchTimedOut) -> {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),

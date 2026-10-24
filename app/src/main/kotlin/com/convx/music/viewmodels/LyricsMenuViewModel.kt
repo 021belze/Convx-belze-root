@@ -95,13 +95,12 @@ constructor(
     ) {
         val artistTitleKey = "${mediaMetadata.artists.joinToString { it.name }}-${mediaMetadata.title}".replace(" ", "")
         lyricsHelper.evictCache(mediaMetadata.id, artistTitleKey)
-        database.query {
-            lyricsEntity?.let(::delete)
-            val lyricsWithProvider =
-                runBlocking {
-                    lyricsHelper.getLyrics(mediaMetadata)
-                }
-            upsert(LyricsEntity(mediaMetadata.id, lyricsWithProvider.lyrics, lyricsWithProvider.provider))
+        viewModelScope.launch(Dispatchers.IO) {
+            val lyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
+            database.query {
+                lyricsEntity?.let(::delete)
+                upsert(LyricsEntity(mediaMetadata.id, lyricsWithProvider.lyrics, lyricsWithProvider.provider))
+            }
         }
     }
 

@@ -184,7 +184,7 @@ object ComposeToImage {
         // Calculate line count and adaptive dimensions
         val lineCount = lyrics.lines().filter { it.isNotBlank() }.size.coerceAtLeast(1)
         val dims = when {
-            lineCount == 1 -> ImageDims(76f, 16f, 28f, 32f, 24f, 1.3f)
+            lineCount == 1 -> ImageDims(64f, 14f, 22f, 28f, 16f, 1.28f)
             lineCount <= 3 -> ImageDims(62f, 14f, 24f, 23f, 18f, 1.28f)
             lineCount <= 6 -> ImageDims(48f, 12f, 20f, 18f, 13f, 1.22f)
             else -> ImageDims(38f, 10f, 16f, 15f, 10f, 1.18f)

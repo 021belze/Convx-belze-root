@@ -671,10 +671,12 @@ fun isNewerVersion(latestVersion: String, currentVersion: String): Boolean {
     if (latest.major != current.major) return latest.major > current.major
     if (latest.minor != current.minor) return latest.minor > current.minor
     if (latest.patch != current.patch) return latest.patch > current.patch
-    if (latest.revision != current.revision) return latest.revision > current.revision
 
     // If numerical components are equal, stable release is newer than beta
     if (current.isBeta && !latest.isBeta) return true
+    if (!current.isBeta && latest.isBeta) return false
+
+    if (latest.revision != current.revision) return latest.revision > current.revision
 
     return false
 }

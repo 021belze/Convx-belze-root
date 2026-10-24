@@ -264,13 +264,11 @@ fun Lyrics(
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val rawLyricsEntity by playerConnection.currentLyrics.collectAsState(initial = null)
-    val allowedProviders = remember { setOf("LrcLib", "YouTube Music", "YouTube Subtitle", "YouTubeMusic", "YouTubeSubtitle", "Unknown") }
-    val lyricsEntity = remember(rawLyricsEntity, mediaMetadata?.duration) {
+    val allowedProviders = remember { com.convx.music.lyrics.LyricsProviderRegistry.allKnownProviders }
+    val lyricsEntity = remember(rawLyricsEntity) {
         val raw = rawLyricsEntity
-        val dur = mediaMetadata?.duration ?: 0
         val isInvalidProvider = raw != null && raw.provider !in allowedProviders
-        val isCorrupted = raw != null && dur > 0 && !isValidLrcForDuration(raw.lyrics, dur)
-        if (raw != null && (isInvalidProvider || isCorrupted)) {
+        if (raw != null && isInvalidProvider) {
             null
         } else {
             raw
@@ -290,7 +288,24 @@ fun Lyrics(
         if (darkTheme == DarkMode.AUTO) isSystemInDarkTheme else darkTheme == DarkMode.ON
     }
 
-    val lines = remember(lyrics, scope) {
+    val lines = remember(
+        lyrics,
+        scope,
+        romanizeJapaneseLyrics,
+        romanizeKoreanLyrics,
+        romanizeRussianLyrics,
+        romanizeUkrainianLyrics,
+        romanizeSerbianLyrics,
+        romanizeBulgarianLyrics,
+        romanizeBelarusianLyrics,
+        romanizeKyrgyzLyrics,
+        romanizeMacedonianLyrics,
+        romanizeCyrillicByLine,
+        romanizeChineseLyrics,
+        romanizeHindiLyrics,
+        romanizePunjabiLyrics,
+        romanizeGreekLyrics
+    ) {
         if (lyrics == null || lyrics == LYRICS_NOT_FOUND) {
             emptyList()
         } else if (lyrics.startsWith("[")) {
@@ -497,26 +512,34 @@ fun Lyrics(
         val meta = mediaMetadata
         if (showLyrics && meta != null) {
             val raw = rawLyricsEntity
-            val isInvalid = raw != null && raw.provider !in allowedProviders
-            val isCorrupted = raw != null && meta.duration > 0 && !isValidLrcForDuration(raw.lyrics, meta.duration)
+            val isManual = raw?.provider == "Manual"
+            val isSynced = raw?.lyrics?.startsWith("[") == true
+            if (isManual) return@LaunchedEffect // Never overwrite user's manual lyrics
 
-            if (raw == null || isInvalid || isCorrupted) {
+            val isNotFound = raw?.lyrics == LYRICS_NOT_FOUND
+            val isInvalid = raw != null && raw.provider !in allowedProviders
+            val isCorrupted = raw != null && isSynced && meta.duration > 0 && !isValidLrcForDuration(raw.lyrics, meta.duration)
+
+            if (raw == null || isInvalid || (isCorrupted && !isNotFound)) {
                 withContext(Dispatchers.IO) {
                     try {
-                        if (isCorrupted) {
-                            database.query { delete(raw) }
-                        }
                         val entryPoint = EntryPointAccessors.fromApplication(
                             context.applicationContext,
                             LyricsHelperEntryPoint::class.java
                         )
                         val lyricsHelper = entryPoint.lyricsHelper()
                         val fetched = lyricsHelper.getLyrics(meta)
-                        database.query {
-                            upsert(LyricsEntity(meta.id, fetched.lyrics, fetched.provider))
+                        if (fetched.lyrics.isNotBlank() && fetched.lyrics != LYRICS_NOT_FOUND) {
+                            database.query {
+                                upsert(LyricsEntity(meta.id, fetched.lyrics, fetched.provider))
+                            }
+                        } else if (raw == null && fetched.lyrics == LYRICS_NOT_FOUND) {
+                            database.query {
+                                upsert(LyricsEntity(meta.id, LyricsEntity.LYRICS_NOT_FOUND, "Unknown"))
+                            }
                         }
                     } catch (e: Exception) {
-                        // Handled/ignored
+                        timber.log.Timber.w(e, "Error fetching lyrics in background for ${meta.id}")
                     }
                 }
             }
@@ -669,7 +692,8 @@ fun Lyrics(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
                 val visibleItemsInfo = lazyListState.layoutInfo.visibleItemsInfo
-                val isCurrentLineVisible = visibleItemsInfo.any { it.index == currentLineIndex }
+                val targetIndex = if (isLyricsProviderShown) currentLineIndex + 1 else currentLineIndex
+                val isCurrentLineVisible = visibleItemsInfo.any { it.index == targetIndex }
                 if (isCurrentLineVisible) {
                     initialScrollDone = false
                 }
@@ -684,19 +708,28 @@ fun Lyrics(
         }
     }
 
+    // Reset selection mode & reset auto-scroll when song changes
+    LaunchedEffect(mediaMetadata?.id) {
+        isSelectionModeActive = false
+        selectedIndices.clear()
+        isAutoScrollEnabled = true
+        initialScrollDone = false
+        shouldScrollToFirstLine = true
+    }
+
     // Reset selection mode if lyrics change
     LaunchedEffect(lines) {
         isSelectionModeActive = false
         selectedIndices.clear()
     }
 
-    LaunchedEffect(lyrics) {
-        if (lyrics.isNullOrEmpty() || !lyrics.startsWith("[")) {
+    LaunchedEffect(lyrics, showLyrics) {
+        if (!showLyrics || lyrics.isNullOrEmpty() || !lyrics.startsWith("[")) {
             currentLineIndex = -1
             return@LaunchedEffect
         }
         while (isActive) {
-            delay(16) // Smooth 60fps tracking for word-by-word highlight & lyrics sync
+            val isPlaying = playerConnection.player.isPlaying
             val sliderPosition = sliderPositionProvider()
             isSeeking = sliderPosition != null
             val position = sliderPosition ?: playerConnection.player.currentPosition
@@ -706,6 +739,7 @@ fun Lyrics(
             if (newLineIndex != currentLineIndex) {
                 currentLineIndex = newLineIndex
             }
+            delay(if (isPlaying || isSeeking) 16 else 200)
         }
     }
 
@@ -715,6 +749,7 @@ fun Lyrics(
         } else if (lastPreviewTime != 0L) {
             delay(LyricsPreviewTime)
             lastPreviewTime = 0L
+            isAutoScrollEnabled = true
         }
     }
 
@@ -736,7 +771,7 @@ fun Lyrics(
                 }
             } else {
                 // Item is not visible, scroll directly to keep up with fast rap transitions
-                lazyListState.scrollToItem(targetIndex)
+                lazyListState.scrollToItem(lookUpIndex)
             }
         } catch (_: Exception) {
         }
@@ -1847,7 +1882,7 @@ fun Lyrics(
                             LyricsLineV2(
                                 entry = item,
                                 isActive = isActiveLine,
-                                isPast = !isActiveLine && item.time < currentPlaybackPosition,
+                                isPast = !isActiveLine && (if (isSynced) index < displayedCurrentLineIndex else item.time < currentPlaybackPosition),
                                 effectivePlaybackPosition = effectivePlaybackPosition + 150L, // Visual tuning offset for land-on-beat feel
                                 expressiveAccent = expressiveAccent,
                                 inactiveAlpha = 0.35f, // Sync with ArchiveTune inactive alpha
@@ -1910,7 +1945,7 @@ fun Lyrics(
                                         shadow = Shadow(
                                             color = expressiveAccent.copy(alpha = 0.8f * glowIntensity),
                                             offset = Offset(0f, 0f),
-                                            blurRadius = 28f * (1f + pulseEffect)
+                                            blurRadius = 14f + (4f * pulseEffect)
                                         ),
                                         brush = glowBrush
                                     )
@@ -1932,7 +1967,7 @@ fun Lyrics(
                                 text = styledText,
                                 fontSize = lyricsTextSize.sp,
                                 textAlign = alignment,
-                                fontWeight = FontWeight.ExtraBold,
+                                fontWeight = FontWeight.Bold,
                                 lineHeight = (lyricsTextSize * lyricsLineSpacing.coerceAtMost(1.3f)).sp,
                                 modifier = Modifier
                                     .graphicsLayer {
@@ -1941,13 +1976,13 @@ fun Lyrics(
                                     }
                             )
                         } else if (isActiveLine && !lyricsGlowEffect) {
-                            // Active line without glow effect - just bold text
+                            // Active line without glow effect - bold text matching non-active weight
                             Text(
                                 text = mainText,
                                 fontSize = lyricsTextSize.sp,
                                 color = expressiveAccent,
                                 textAlign = alignment,
-                                fontWeight = FontWeight.ExtraBold,
+                                fontWeight = FontWeight.Bold,
                                 lineHeight = (lyricsTextSize * lyricsLineSpacing.coerceAtMost(1.3f)).sp
                             )
                         } else {

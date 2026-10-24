@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import timber.log.Timber
 
 class LyricsHelper
 @Inject
@@ -93,6 +94,8 @@ constructor(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val deferred = scope.async {
             try {
+                var candidateFallback: LyricsWithProvider? = null
+
                 for (provider in providers) {
                     if (!provider.isEnabled(context)) continue
                     try {
@@ -117,11 +120,19 @@ constructor(
 
                         result.onSuccess { lyrics ->
                             if (lyrics.isNotBlank() && lyrics != LYRICS_NOT_FOUND) {
-                                val found = LyricsWithProvider(lyrics, provider.name)
-                                val resultList = listOf(LyricsResult(provider.name, lyrics))
-                                cache.put(mediaMetadata.id, resultList)
-                                cache.put(artistTitleKey, resultList)
-                                return@async found
+                                val isSynced = lyrics.startsWith("[")
+                                if (isSynced && mediaMetadata.duration > 0 && !LyricsUtils.isValidLrcForDuration(lyrics, mediaMetadata.duration)) {
+                                    Timber.w("Lyrics from ${provider.name} failed strict duration validation for ${mediaMetadata.title} (dur: ${mediaMetadata.duration}s), holding as fallback and checking other providers...")
+                                    if (candidateFallback == null) {
+                                        candidateFallback = LyricsWithProvider(lyrics, provider.name)
+                                    }
+                                } else {
+                                    val found = LyricsWithProvider(lyrics, provider.name)
+                                    val resultList = listOf(LyricsResult(provider.name, lyrics))
+                                    cache.put(mediaMetadata.id, resultList)
+                                    cache.put(artistTitleKey, resultList)
+                                    return@async found
+                                }
                             }
                         }.onFailure {
                             reportException(it)
@@ -130,6 +141,15 @@ constructor(
                         reportException(e)
                     }
                 }
+
+                if (candidateFallback != null) {
+                    Timber.d("No strictly matching provider lyrics found, using candidate fallback from ${candidateFallback.provider}")
+                    val resultList = listOf(LyricsResult(candidateFallback.provider, candidateFallback.lyrics))
+                    cache.put(mediaMetadata.id, resultList)
+                    cache.put(artistTitleKey, resultList)
+                    return@async candidateFallback
+                }
+
                 LyricsWithProvider(LYRICS_NOT_FOUND, "Unknown")
             } finally {
                 inFlightRequests.remove(mediaMetadata.id)

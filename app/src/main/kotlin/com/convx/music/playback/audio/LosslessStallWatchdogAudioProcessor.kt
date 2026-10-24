@@ -25,7 +25,7 @@ import kotlin.math.abs
  */
 @UnstableApi
 class LosslessStallWatchdogAudioProcessor(
-    private val minStallDurationUs: Long = 1_500_000L,
+    private val minStallDurationUs: Long = 3_000_000L,
     private val silenceThreshold: Int = 128,
     private val onStallDetected: () -> Unit,
 ) : AudioProcessor {

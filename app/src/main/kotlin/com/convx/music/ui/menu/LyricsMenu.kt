@@ -129,7 +129,7 @@ fun LyricsMenu(
                         LyricsEntity(
                             id = mediaMetadataProvider().id,
                             lyrics = it,
-                            provider = lyricsProvider()?.provider ?: "Manual",
+                            provider = "Manual",
                         ),
                     )
                 }
@@ -169,7 +169,6 @@ fun LyricsMenu(
 
     if (showSearchDialog) {
         DefaultDialog(
-            modifier = Modifier.verticalScroll(rememberScrollState()),
             onDismiss = { showSearchDialog = false },
             icon = {
                 Icon(

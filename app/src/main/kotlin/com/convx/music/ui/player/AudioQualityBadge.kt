@@ -33,6 +33,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.convx.music.R
 import com.convx.music.playback.PlayerConnection
 
+import androidx.compose.runtime.produceState
+import androidx.media3.common.Player
+
 @Composable
 fun AudioQualityBadge(
     playerConnection: PlayerConnection,
@@ -41,10 +44,29 @@ fun AudioQualityBadge(
     modifier: Modifier = Modifier,
 ) {
     val currentFormat by playerConnection.currentFormat.collectAsState(initial = null)
+    val mediaMetadata by playerConnection.mediaMetadata.collectAsState(initial = null)
 
     val activePlayer by playerConnection.service.playerFlow.collectAsState()
-    val playerFormat = remember(activePlayer) {
-        (activePlayer as? ExoPlayer)?.audioFormat
+    val playerFormat by produceState(
+        initialValue = activePlayer?.audioFormat,
+        activePlayer,
+        mediaMetadata?.id
+    ) {
+        val target = activePlayer ?: return@produceState
+        value = target.audioFormat
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.contains(Player.EVENT_TRACKS_CHANGED) ||
+                    events.contains(Player.EVENT_POSITION_DISCONTINUITY)
+                ) {
+                    value = (player as? ExoPlayer)?.audioFormat
+                }
+            }
+        }
+        target.addListener(listener)
+        awaitDispose {
+            target.removeListener(listener)
+        }
     }
 
     val isLosslessStream = currentFormat?.mimeType?.contains("flac", ignoreCase = true) == true ||

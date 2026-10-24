@@ -297,7 +297,7 @@ fun TextFieldDialog(
         }
     ) {
         Column(
-            modifier = Modifier.weight(weight = 1f, fill = false)
+            modifier = Modifier.fillMaxWidth()
         ) {
             if (textFields != null) {
                 textFields.forEachIndexed { index, (label, value) ->

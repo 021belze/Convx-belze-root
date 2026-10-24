@@ -329,18 +329,22 @@ fun PlayerV2(
     LaunchedEffect(isPlaying, state.isCollapsed) {
         if (!state.isCollapsed) {
             while (isActive) {
-                val rawDuration = playerConnection.player.duration
-                position = playerConnection.player.currentPosition.coerceAtLeast(0L)
-                duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
+                if (sliderPosition == null) {
+                    val rawDuration = playerConnection.player.duration
+                    position = playerConnection.player.currentPosition.coerceAtLeast(0L)
+                    duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
+                }
                 delay(if (isPlaying) 200 else 500)
             }
         }
     }
 
     LaunchedEffect(mediaMetadata?.id, state.isCollapsed) {
-        val rawDuration = playerConnection.player.duration
-        position = playerConnection.player.currentPosition.coerceAtLeast(0L)
-        duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
+        if (sliderPosition == null) {
+            val rawDuration = playerConnection.player.duration
+            position = playerConnection.player.currentPosition.coerceAtLeast(0L)
+            duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration
+        }
     }
 
     val staticColor by rememberPreference(PlayerStaticColorKey, defaultValue = 0xFF1C1C1E.toInt())
@@ -782,7 +786,7 @@ fun PlayerV2(
                                 ) {
                                     if (targetState == PlayerInternalState.LYRICS) {
                                         Lyrics(
-                                            sliderPositionProvider = { sliderPosition ?: position },
+                                            sliderPositionProvider = { sliderPosition },
                                             showLyrics = true,
                                             modifier = Modifier.fillMaxSize()
                                         )
@@ -1301,7 +1305,7 @@ fun PlayerV2(
                             PlayerInternalState.LYRICS -> {
                                 Column(modifier = Modifier.fillMaxSize()) {
                                     Lyrics(
-                                        sliderPositionProvider = { sliderPosition ?: position },
+                                        sliderPositionProvider = { sliderPosition },
                                         showLyrics = true,
                                         modifier = Modifier.fillMaxSize()
                                     )

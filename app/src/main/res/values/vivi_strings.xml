@@ -1294,4 +1294,14 @@
     <string name="karaoke_already_active">Karaoke (synced lyrics) is already active</string>
     <string name="searching_karaoke_lyrics">Searching synced karaoke lyrics…</string>
     <string name="convx_default">Convx Default</string>
+    <string name="search_local_music">Search local music</string>
+    <string name="grant_storage_permission_msg">Grant permission to access your music library</string>
+    <string name="no_local_music_found">No local music found</string>
+    <string name="scanning_device_msg">Scanning device…</string>
+    <string name="scan_result_found">Found %1$d new songs (%2$d total)</string>
+    <string name="rescan">Rescan</string>
+    <string name="sort_by_duration">Duration</string>
+    <string name="sort_by_recent">Recently added</string>
+    <string name="stats_local_counts">%1$d songs · %2$d albums · %3$d artists</string>
+    <string name="btn_shuffle">Shuffle</string>
 </resources>

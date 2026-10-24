@@ -41,41 +41,22 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Generate debug.keystore
-        run: |
-          mkdir -p ~/.android
-          keytool -genkey -v \
-            -keystore ~/.android/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
-
-      - name: Decode release keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE }}
-        run: |
-          mkdir -p app/keystore
-          echo "$KEYSTORE_BASE64" | base64 -d > app/keystore/release.keystore
-
       - name: Build Universal GMS Release APK
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew assembleUniversalGmsRelease --no-configuration-cache --console=plain --warning-mode summary -x lint
+          ./gradlew assembleUniversalGmsDebug --no-configuration-cache --console=plain --warning-mode summary -x lint
 
-      - name: Upload APK to Release
+      - name: Upload APK and Changelog to Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          APK_PATH=$(find app/build/outputs/apk -name '*.apk' | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/universalGms/debug -name '*.apk' | head -n 1)
           mv "$APK_PATH" "convx-${TAG}.apk"
-          gh release upload "$TAG" "convx-${TAG}.apk" --repo "${{ github.repository }}" --clobber
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" "convx-${TAG}.apk" changelog.json --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "$TAG" "convx-${TAG}.apk" changelog.json --repo "${{ github.repository }}" --title "Convx ${TAG}" --notes-file changelog.json
+          fi

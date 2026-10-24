@@ -136,7 +136,7 @@ class PlayerConnection(
         }
     val currentLyrics = mediaMetadata.flatMapLatest { mediaMetadata ->
         database.lyrics(mediaMetadata?.id)
-    }
+    }.stateIn(scope, SharingStarted.Lazily, null)
     val currentFormat =
         mediaMetadata.flatMapLatest { mediaMetadata ->
             database.format(mediaMetadata?.id)
@@ -518,9 +518,11 @@ class PlayerConnection(
     }
 
     private fun updateCanSkipPreviousAndNext() {
-        if (!player.currentTimeline.isEmpty) {
+        val timeline = player.currentTimeline
+        val currentIndex = player.currentMediaItemIndex
+        if (!timeline.isEmpty && currentIndex in 0 until timeline.windowCount) {
             val window =
-                player.currentTimeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
+                timeline.getWindow(currentIndex, Timeline.Window())
             canSkipPrevious.value = player.isCommandAvailable(COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) ||
                     !window.isLive ||
                     player.isCommandAvailable(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)

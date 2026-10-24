@@ -471,7 +471,14 @@ class MainActivity : ComponentActivity() {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             if (service is MusicBinder) {
+                // If existing connection is already attached to this exact service instance, keep it
+                // instead of trashing all StateFlows and causing infinite loading states in UI
+                if (playerConnection != null && playerConnection?.service == service.service) {
+                    Timber.tag("MainActivity").d("Reusing existing PlayerConnection for same service instance")
+                    return
+                }
                 try {
+                    playerConnection?.dispose()
                     playerConnection = PlayerConnection(this@MainActivity, service, database, lifecycleScope)
                     Timber.tag("MainActivity").d("PlayerConnection created successfully")
                     // Connect Listen Together manager to player
@@ -482,6 +489,7 @@ class MainActivity : ComponentActivity() {
                     lifecycleScope.launch {
                         delay(500.milliseconds)
                         try {
+                            playerConnection?.dispose()
                             playerConnection = PlayerConnection(this@MainActivity, service, database, lifecycleScope)
                             listenTogetherManager.setPlayerConnection(playerConnection)
                         } catch (e2: Exception) {
@@ -526,6 +534,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        playerConnection?.dispose()
         // Covers a deliberate back-out, where the activity really is finishing. The swipe
         // -from-recents case is handled in MusicService.onTaskRemoved instead: there
         // isFinishing is false and this branch never ran, which is why the setting looked
@@ -539,8 +548,8 @@ class MainActivity : ComponentActivity() {
             // ("Service not registered"), tearing the audio session down via a
             // crash instead of a clean stop.
             stopService(Intent(this, MusicService::class.java))
-            playerConnection = null
         }
+        playerConnection = null
     }
 
     override fun onNewIntent(intent: Intent) {

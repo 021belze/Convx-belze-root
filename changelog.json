@@ -1,28 +1,31 @@
 {
-  "description": "Convx 1.5.3 (Beta r14) introduces a built-in free lyrics translation engine, offline Greek romanization, Classic Player layout and artwork fixes, alongside vital playback and download resilience enhancements.",
+  "description": "Convx 1.5.3 Official Release delivers a rock-solid audio & player experience, built-in free lyrics translation, offline Greek romanization, intelligent lyrics fallback with duration accuracy, and critical playback resilience.",
   "image": "",
   "changelog": [
     {
       "title": "Lyrics & Translation Engine",
       "items": [
         "Integrated built-in free Google Translate engine: lyrics can now be translated out-of-the-box without requiring AI API keys or third-party configurations.",
-        "Implemented persistent Room database caching for translations, guaranteeing instantaneous zero-network reloads on subsequent plays.",
+        "Implemented resilient provider fallback with duration accuracy validation: LRCLIB duration mismatches gracefully fallback to official YouTube Music lyrics.",
+        "Added persistent Room database caching for translations and intelligent not-found state management to prevent continuous looping or data waste.",
         "Added offline Greek (ELOT 743 / ISO 843) lyric romanization with a dedicated toggle switch in Romanization Settings.",
         "Made the lyrics translation toggle universally available and interactive directly within the player transport row and lyrics menu."
       ]
     },
     {
-      "title": "Classic Player Refinements",
+      "title": "Player & Audio Engine Stability",
       "items": [
-        "Resolved missing album cover issue in Classic Player theme; artwork now renders reliably across all player background styles.",
-        "Cleaned up transport control hierarchy by removing redundant repeat and favorite buttons from the primary playback row, keeping Previous, Play (100dp), and Next neatly centered and balanced."
+        "Zero-latency StateFlow architecture in PlayerConnection eliminates state flickering and empty lyrics during transitions between Home and Lyrics player.",
+        "Smooth DSP volume normalization: neutral gain holding prevents abrupt volume jumps when format metadata resolves.",
+        "Resolved audio stall and false-positive recovery triggers during intro silence and network handoffs.",
+        "Cleaned up transport control hierarchy and resolved Classic Player album cover rendering across all background styles."
       ]
     },
     {
-      "title": "Playback & Download Stability",
+      "title": "Database & Lifecycle Resilience",
       "items": [
-        "Fixed audio playback freezes and stream stall during network handoffs using safe coroutine timeouts and active watchdog stall arming.",
-        "Resolved download progress stall caused by conflicting range query parameters, bolstered by resilient OkHttp connection and read timeouts."
+        "Fixed Room database cleanup query to safeguard YouTube Music, YouTube Subtitle, and Manual user lyrics across service restarts.",
+        "Resolved activity service binding lifecycle leak to ensure seamless resume from background."
       ]
     },
     {

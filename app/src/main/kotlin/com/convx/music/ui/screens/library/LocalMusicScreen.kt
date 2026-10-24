@@ -203,15 +203,15 @@ fun LocalMusicScreen(
                                 onDismissRequest = { showSortMenu = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Name") },
+                                    text = { Text(stringResource(R.string.sort_by_name)) },
                                     onClick = { sortMode = LocalSortMode.NAME; showSortMenu = false },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Duration") },
+                                    text = { Text(stringResource(R.string.sort_by_duration)) },
                                     onClick = { sortMode = LocalSortMode.DURATION; showSortMenu = false },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Recently added") },
+                                    text = { Text(stringResource(R.string.sort_by_recent)) },
                                     onClick = { sortMode = LocalSortMode.RECENT; showSortMenu = false },
                                 )
                             }
@@ -229,7 +229,7 @@ fun LocalMusicScreen(
                             } else {
                                 Icon(
                                     painter = painterResource(R.drawable.refresh),
-                                    contentDescription = "Rescan",
+                                    contentDescription = stringResource(R.string.rescan),
                                 )
                             }
                         }
@@ -242,7 +242,7 @@ fun LocalMusicScreen(
                 val totalCount = displaySongs.size + displayAlbums.size + displayArtists.size
                 if (totalCount > 0) {
                     Text(
-                        text = "${displaySongs.size} songs \u00b7 ${displayAlbums.size} albums \u00b7 ${displayArtists.size} artists",
+                        text = stringResource(R.string.stats_local_counts, displaySongs.size, displayAlbums.size, displayArtists.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -253,7 +253,7 @@ fun LocalMusicScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search local music") },
+                        placeholder = { Text(stringResource(R.string.search_local_music)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -271,7 +271,7 @@ fun LocalMusicScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "Grant permission to access your music library",
+                        text = stringResource(R.string.grant_storage_permission_msg),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -286,7 +286,7 @@ fun LocalMusicScreen(
                             permissionLauncher.launch(permission)
                         },
                     ) {
-                        Text("Grant Permission")
+                        Text(stringResource(R.string.grant_permission))
                     }
                 }
             }
@@ -299,7 +299,7 @@ fun LocalMusicScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "No local music found",
+                        text = stringResource(R.string.no_local_music_found),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -307,7 +307,7 @@ fun LocalMusicScreen(
                     Button(
                         onClick = { viewModel.scanDevice(context) },
                     ) {
-                        Text("Scan Device")
+                        Text(stringResource(R.string.scan_device))
                     }
                 }
             }
@@ -326,7 +326,7 @@ fun LocalMusicScreen(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "Scanning device...",
+                        text = stringResource(R.string.scanning_device_msg),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -346,14 +346,14 @@ fun LocalMusicScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "Found ${result.newSongs} new songs (${result.totalFound} total)",
+                        text = stringResource(R.string.scan_result_found, result.newSongs, result.totalFound),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     OutlinedButton(
                         onClick = { viewModel.scanDevice(context) },
                     ) {
-                        Text("Rescan", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.rescan), style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -387,7 +387,7 @@ fun LocalMusicScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Play All")
+                        Text(stringResource(R.string.play_all))
                     }
                     Button(
                         onClick = {
@@ -408,7 +408,7 @@ fun LocalMusicScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Shuffle")
+                        Text(stringResource(R.string.btn_shuffle))
                     }
                 }
             }
